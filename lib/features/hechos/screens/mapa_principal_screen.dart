@@ -5,6 +5,8 @@ import '../../auth/screens/login_screen.dart';
 import '../../auth/controllers/auth_controller.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../controllers/hechos_controller.dart';
+import 'nuevo_hecho_sheet.dart';
 
 class MapaPrincipalScreen extends StatefulWidget {
   const MapaPrincipalScreen({super.key});
@@ -16,6 +18,17 @@ class MapaPrincipalScreen extends StatefulWidget {
 class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
   int _indiceTabActual = 0;
   final AuthController _authController = AuthController();
+
+  // --- EL ESTADO ELEVADO ---
+  // Ahora el cerebro vive en la clase principal para que todos puedan usarlo
+  final HechosController _hechosController = HechosController();
+
+  @override
+  void dispose() {
+    // Es crucial limpiar el controlador cuando la pantalla principal muera
+    _hechosController.dispose();
+    super.dispose();
+  }
 
   // --- LAZY LOGIN ---
   void _verificarAccesoCiudadano(VoidCallback accionPermitida) {
@@ -31,10 +44,11 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
   }
 
   // --- LAS 4 PANTALLAS PRINCIPALES ---
-  Widget get _vistaMapa => const _VistaMapaInteractiva();
+  // Le pasamos el controlador prestado al mapa
+  Widget get _vistaMapa =>
+      _VistaMapaInteractiva(controlador: _hechosController);
   Widget get _vistaComunidad => const _VistaComunidadFeed();
-  Widget get _vistaActividad =>
-      const _VistaActividadNotificaciones(); // NUEVA VISTA
+  Widget get _vistaActividad => const _VistaActividadNotificaciones();
   Widget get _vistaPerfil => const _VistaPerfilUsuario();
 
   @override
@@ -45,7 +59,6 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
         final session = snapshot.hasData ? snapshot.data!.session : null;
         final bool estaLogueado = session != null;
 
-        // Lista actualizada a 4 vistas
         final List<Widget> vistas = [
           _vistaMapa,
           _vistaComunidad,
@@ -55,12 +68,9 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
 
         return Scaffold(
           extendBodyBehindAppBar: true,
-
           appBar: AppBar(
             backgroundColor: Colors.white.withOpacity(0.8),
             elevation: 0,
-
-            // centrar horizontalmente el logo
             title: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [SvgPicture.asset('assets/logo.svg', height: 70)],
@@ -91,7 +101,6 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
             ],
           ),
 
-          // --- CUERPO ANIMADO ---
           body: AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
             transitionBuilder: (Widget child, Animation<double> animation) {
@@ -103,16 +112,22 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
             ),
           ),
 
-          // --- BOTÓN FLOTANTE (Oculto en Actividad y Perfil) ---
+          // --- BOTÓN FLOTANTE ---
           floatingActionButton: (_indiceTabActual == 0 || _indiceTabActual == 1)
               ? FloatingActionButton(
                   onPressed: () {
                     _verificarAccesoCiudadano(() {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Abriendo cámara para nuevo reporte...',
-                          ),
+                      final userId =
+                          Supabase.instance.client.auth.currentUser!.id;
+
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (context) => NuevoHechoSheet(
+                          ciudadanoId: userId,
+                          // ¡El botón ahora encuentra el controlador sin problemas!
+                          controller: _hechosController,
                         ),
                       );
                     });
@@ -124,7 +139,6 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
               : null,
           floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
 
-          // --- BOTTOM NAVIGATION BAR ---
           bottomNavigationBar: Container(
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.9),
@@ -148,13 +162,11 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
               child: BottomNavigationBar(
                 currentIndex: _indiceTabActual,
                 onTap: (index) {
-                  // Comunidad (1), Actividad (2) y Perfil (3) requieren login
                   if (index == 1 || index == 2 || index == 3) {
                     _verificarAccesoCiudadano(() {
                       setState(() => _indiceTabActual = index);
                     });
                   } else {
-                    // Mapa (0) es libre
                     setState(() => _indiceTabActual = index);
                   }
                 },
@@ -175,7 +187,7 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
                   BottomNavigationBarItem(
                     icon: Icon(Icons.notifications_none),
                     label: 'Actividad',
-                  ), // Vuelve la campanita
+                  ),
                   BottomNavigationBarItem(
                     icon: Icon(Icons.person_outline),
                     label: 'Perfil',
@@ -195,41 +207,64 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
 // ============================================================================
 
 class _VistaMapaInteractiva extends StatefulWidget {
-  const _VistaMapaInteractiva();
+  // Ahora el mapa recibe el controlador como parámetro en lugar de crearlo
+  final HechosController controlador;
+
+  const _VistaMapaInteractiva({required this.controlador});
 
   @override
   State<_VistaMapaInteractiva> createState() => _VistaMapaInteractivaState();
 }
 
 class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
-  // Coordenadas centrales de Caleta Olivia
   static const CameraPosition _puntoInicial = CameraPosition(
-    target: LatLng(-46.44194444, -67.5175),
+    target: LatLng(-46.4389, -67.5191), // Caleta Olivia
     zoom: 14.0,
   );
 
   @override
+  void initState() {
+    super.initState();
+    // Usamos widget.controlador para descargar los datos al iniciar
+    widget.controlador.cargarHechos();
+  }
+
+  // Ya no necesitamos el dispose() aquí porque se maneja en la clase padre
+
+  @override
   Widget build(BuildContext context) {
-    return GoogleMap(
-      initialCameraPosition: _puntoInicial,
-      mapType: MapType.normal,
-      myLocationEnabled: true, // Muestra el punto azul del usuario
-      myLocationButtonEnabled: false, // Lo manejaremos con nuestra propia UI
-      zoomControlsEnabled: false, // Diseño más limpio
-      // Aquí es donde pintaremos los reportes de la base de datos
-      markers: {
-        Marker(
-          markerId: const MarkerId('mock_urgente'),
-          position: const LatLng(-46.4410, -67.5250),
-          infoWindow: const InfoWindow(
-            title: 'Bache Urgente',
-            snippet: 'Reportado hace 2 horas',
-          ),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-        ),
-      },
-      onMapCreated: (GoogleMapController controller) {
-        // Aquí puedes guardar el controlador para mover la cámara luego
+    // Escuchamos al controlador prestado
+    return ListenableBuilder(
+      listenable: widget.controlador,
+      builder: (context, child) {
+        return Stack(
+          children: [
+            GoogleMap(
+              initialCameraPosition: _puntoInicial,
+              mapType: MapType.normal,
+              myLocationEnabled: true,
+              myLocationButtonEnabled: false,
+              zoomControlsEnabled: false,
+              // Pintamos los marcadores usando el controlador del padre
+              markers: widget.controlador.marcadores,
+            ),
+            if (widget.controlador.estaCargando)
+              const Positioned(
+                top: 100,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Card(
+                    shape: CircleBorder(),
+                    child: Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: CircularProgressIndicator(strokeWidth: 3),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
       },
     );
   }
@@ -251,7 +286,6 @@ class _VistaComunidadFeed extends StatelessWidget {
   }
 }
 
-// NUEVO PLACEHOLDER PARA ACTIVIDAD
 class _VistaActividadNotificaciones extends StatelessWidget {
   const _VistaActividadNotificaciones();
   @override
