@@ -4,6 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../auth/controllers/auth_controller.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class MapaPrincipalScreen extends StatefulWidget {
   const MapaPrincipalScreen({super.key});
@@ -61,7 +62,7 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
 
             // centrar horizontalmente el logo
             title: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.end,
               children: [SvgPicture.asset('assets/logo.svg', height: 70)],
             ),
             actions: [
@@ -193,60 +194,43 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
 // SUB-WIDGETS DE VISTAS
 // ============================================================================
 
-class _VistaMapaInteractiva extends StatelessWidget {
+class _VistaMapaInteractiva extends StatefulWidget {
   const _VistaMapaInteractiva();
+
+  @override
+  State<_VistaMapaInteractiva> createState() => _VistaMapaInteractivaState();
+}
+
+class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
+  // Coordenadas centrales de Caleta Olivia
+  static const CameraPosition _puntoInicial = CameraPosition(
+    target: LatLng(-46.44194444, -67.5175),
+    zoom: 14.0,
+  );
+
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Container(
-          width: double.infinity,
-          height: double.infinity,
-          color: const Color(0xFFC8E6D3),
-          child: const Center(
-            child: Text(
-              'Mapa de Caleta Olivia',
-              style: TextStyle(color: Colors.black38),
-            ),
+    return GoogleMap(
+      initialCameraPosition: _puntoInicial,
+      mapType: MapType.normal,
+      myLocationEnabled: true, // Muestra el punto azul del usuario
+      myLocationButtonEnabled: false, // Lo manejaremos con nuestra propia UI
+      zoomControlsEnabled: false, // Diseño más limpio
+      // Aquí es donde pintaremos los reportes de la base de datos
+      markers: {
+        Marker(
+          markerId: const MarkerId('mock_urgente'),
+          position: const LatLng(-46.4410, -67.5250),
+          infoWindow: const InfoWindow(
+            title: 'Bache Urgente',
+            snippet: 'Reportado hace 2 horas',
           ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
         ),
-        Positioned(
-          top: MediaQuery.of(context).size.height * 0.4,
-          left: MediaQuery.of(context).size.width * 0.5,
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: const BoxDecoration(
-                  color: Colors.redAccent,
-                  shape: BoxShape.circle,
-                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 8)],
-                ),
-                child: const Icon(Icons.warning, color: Colors.white),
-              ),
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black12, blurRadius: 4),
-                  ],
-                ),
-                child: const Text(
-                  'URGENTE',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.red,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+      },
+      onMapCreated: (GoogleMapController controller) {
+        // Aquí puedes guardar el controlador para mover la cámara luego
+      },
     );
   }
 }

@@ -36,6 +36,8 @@ dependencies:
   cupertino_icons: ^1.0.8
   supabase_flutter: ^2.12.2
   flutter_svg: ^2.2.4
+  google_maps_flutter: ^2.5.0
+  geolocator: ^10.1.0 # Para obtener la ubicación del ciudadano
 
 dev_dependencies:
   flutter_test:
@@ -87,4 +89,4 @@ flutter:
   #         weight: 700
   #
   # For details regarding fonts from package dependencies,
-  # see https://flutter.dev/to/font-from-package
+  # see https://flutter.dev/to/font-from-package

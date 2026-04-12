@@ -6,6 +6,8 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+<string>RadarCO necesita tu ubicación para situar los reportes con precisión en el mapa.</string>
 	<key>CFBundleDisplayName</key>
 	<string>Radar Ciudadano</string>
 	<key>CFBundleExecutable</key>
