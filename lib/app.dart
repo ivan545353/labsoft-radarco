@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'core/theme/app_colors.dart';
-import 'features/auth/screens/auth_gate.dart';
+// Apuntamos directo al mapa
+import 'features/hechos/screens/mapa_principal_screen.dart';
 
 class RadarCiudadanoApp extends StatelessWidget {
   const RadarCiudadanoApp({super.key});
@@ -21,7 +22,8 @@ class RadarCiudadanoApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const AuthGate(),
+      // ¡El mapa es la pantalla por defecto para todo el mundo!
+      home: const MapaPrincipalScreen(),
     );
   }
 }

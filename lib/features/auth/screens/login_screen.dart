@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_colors.dart';
 import '../controllers/auth_controller.dart';
 import 'register_screen.dart';
@@ -17,8 +19,25 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   final AuthController _authController = AuthController();
 
+  // Escuchador para cerrar la pantalla si Google nos loguea
+  late final StreamSubscription<AuthState> _authSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((
+      data,
+    ) {
+      if (data.session != null && mounted) {
+        // SOLUCIÓN: Limpia todo el historial de pantallas y vuelve a la raíz (el mapa)
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    });
+  }
+
   @override
   void dispose() {
+    _authSubscription.cancel();
     _emailController.dispose();
     _passwordController.dispose();
     _authController.dispose();
@@ -27,7 +46,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _ejecutarLogin() async {
     FocusScope.of(context).unfocus();
-
     if (!_formKey.currentState!.validate()) return;
 
     final exito = await _authController.iniciarSesion(
@@ -45,6 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
           duration: Duration(seconds: 2),
         ),
       );
+      // ¡ELIMINAMOS EL NAVIGATOR.POP MANUAL DE AQUÍ! El listener se encargará de cerrarlo.
     } else if (_authController.mensajeError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -55,12 +74,10 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // --- NUEVA FUNCIÓN: Inicio de sesión con Google ---
   Future<void> _ejecutarLoginConGoogle() async {
     FocusScope.of(context).unfocus();
     await _authController.entrarConGoogle();
 
-    // Si la redirección falla antes de abrir el navegador web, mostramos el error
     if (!mounted) return;
     if (_authController.mensajeError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -72,12 +89,10 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // --- FUNCIÓN: Mostrar el Dialog de Recuperación ---
   void _mostrarDialogoRecuperacion() {
     final emailRecuperacionController = TextEditingController(
       text: _emailController.text,
     );
-
     showDialog(
       context: context,
       builder: (context) {
@@ -87,14 +102,14 @@ class _LoginScreenState extends State<LoginScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.',
+                'Ingresa tu correo electrónico y te enviaremos un enlace.',
                 style: TextStyle(fontSize: 14),
               ),
               const SizedBox(height: 20),
               TextField(
                 controller: emailRecuperacionController,
                 decoration: const InputDecoration(
-                  labelText: 'Correo Electrónico',
+                  labelText: 'Correo',
                   prefixIcon: Icon(Icons.email),
                   border: OutlineInputBorder(),
                 ),
@@ -113,23 +128,16 @@ class _LoginScreenState extends State<LoginScreen> {
             ElevatedButton(
               onPressed: () async {
                 FocusScope.of(context).unfocus();
-
                 final exito = await _authController.recuperarContrasena(
                   emailRecuperacionController.text.trim(),
                 );
-
                 if (!mounted) return;
-
                 Navigator.pop(context);
-
                 if (exito) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text(
-                        'Revisa tu bandeja de entrada o spam. Te hemos enviado un enlace.',
-                      ),
+                      content: Text('Revisa tu bandeja de entrada.'),
                       backgroundColor: AppColors.exito,
-                      duration: Duration(seconds: 4),
                     ),
                   );
                 } else if (_authController.mensajeError != null) {
@@ -158,6 +166,10 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ), // AppBar por si quieren volver atrás
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -166,177 +178,133 @@ class _LoginScreenState extends State<LoginScreen> {
             builder: (context, child) {
               return Form(
                 key: _formKey,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SvgPicture.asset('assets/logo.svg', height: 80),
-                    const SizedBox(height: 40),
-                    TextFormField(
-                      controller: _emailController,
-                      decoration: const InputDecoration(
-                        labelText: 'Correo Electrónico',
-                        prefixIcon: Icon(Icons.email),
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.emailAddress,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Por favor ingresa tu correo.';
-                        }
-                        final bool emailValido = RegExp(
-                          r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+",
-                        ).hasMatch(value);
-                        if (!emailValido) {
-                          return 'Ingresa un correo electrónico válido.';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 15),
-                    TextFormField(
-                      controller: _passwordController,
-                      decoration: const InputDecoration(
-                        labelText: 'Contraseña',
-                        prefixIcon: Icon(Icons.lock),
-                        border: OutlineInputBorder(),
-                      ),
-                      obscureText: true,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Por favor ingresa tu contraseña.';
-                        }
-                        return null;
-                      },
-                    ),
-
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: _authController.estaCargando
-                            ? null
-                            : _mostrarDialogoRecuperacion,
-                        style: TextButton.styleFrom(
-                          foregroundColor: AppColors.azulAcento,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SvgPicture.asset('assets/logo.svg', height: 80),
+                      const SizedBox(height: 40),
+                      TextFormField(
+                        controller: _emailController,
+                        decoration: const InputDecoration(
+                          labelText: 'Correo Electrónico',
+                          prefixIcon: Icon(Icons.email),
+                          border: OutlineInputBorder(),
                         ),
-                        child: const Text('¿Olvidaste tu contraseña?'),
+                        keyboardType: TextInputType.emailAddress,
+                        validator: (value) => value == null || value.isEmpty
+                            ? 'Por favor ingresa tu correo.'
+                            : null,
                       ),
-                    ),
-                    const SizedBox(height: 10),
-
-                    if (_authController.estaCargando)
-                      const Center(child: CircularProgressIndicator())
-                    else
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // --- Botón tradicional de Iniciar Sesión ---
-                          Container(
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [
-                                  AppColors.azulPrimario,
-                                  AppColors.azulAcento,
-                                ],
-                                begin: Alignment.centerLeft,
-                                end: Alignment.centerRight,
+                      const SizedBox(height: 15),
+                      TextFormField(
+                        controller: _passwordController,
+                        decoration: const InputDecoration(
+                          labelText: 'Contraseña',
+                          prefixIcon: Icon(Icons.lock),
+                          border: OutlineInputBorder(),
+                        ),
+                        obscureText: true,
+                        validator: (value) => value == null || value.isEmpty
+                            ? 'Por favor ingresa tu contraseña.'
+                            : null,
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _authController.estaCargando
+                              ? null
+                              : _mostrarDialogoRecuperacion,
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppColors.azulAcento,
+                          ),
+                          child: const Text('¿Olvidaste tu contraseña?'),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      if (_authController.estaCargando)
+                        const Center(child: CircularProgressIndicator())
+                      else
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Container(
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    AppColors.azulPrimario,
+                                    AppColors.azulAcento,
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(30),
                               ),
-                              borderRadius: BorderRadius.circular(30),
+                              child: ElevatedButton(
+                                onPressed: _ejecutarLogin,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.transparent,
+                                  shadowColor: Colors.transparent,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(30),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Iniciar Sesión',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
                             ),
-                            child: ElevatedButton(
-                              onPressed: _ejecutarLogin,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.transparent,
-                                shadowColor: Colors.transparent,
+                            const SizedBox(height: 12),
+                            OutlinedButton.icon(
+                              onPressed: _ejecutarLoginConGoogle,
+                              icon: Image.network(
+                                'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png',
+                                height: 24,
+                              ),
+                              label: const Text(
+                                'Ingresar con Google',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.black87,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: Colors.white,
                                 padding: const EdgeInsets.symmetric(
-                                  vertical: 16,
+                                  vertical: 14,
                                 ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(30),
                                 ),
                               ),
-                              child: const Text(
-                                'Iniciar Sesión',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          // --- NUEVO: Botón de Google ---
-                          OutlinedButton.icon(
-                            onPressed: _ejecutarLoginConGoogle,
-                            icon: Image.network(
-                              'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png',
-                              height: 24,
-                            ),
-                            label: const Text(
-                              'Ingresar con Google',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.black87,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(30),
-                              ),
-                              side: BorderSide(color: Colors.grey.shade300),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          TextButton(
-                            onPressed: () {
-                              Navigator.push(
+                            const SizedBox(height: 16),
+                            TextButton(
+                              onPressed: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) => const RegisterScreen(),
                                 ),
-                              );
-                            },
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppColors.azulAcento,
-                            ),
-                            child: const Text(
-                              '¿No tienes cuenta? Regístrate aquí',
-                            ),
-                          ),
-                          const Divider(height: 40),
-                          OutlinedButton(
-                            onPressed: () async {
-                              await _authController.entrarComoAnonimo();
-                              if (!mounted) return;
-                              if (_authController.mensajeError != null) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      _authController.mensajeError!,
-                                    ),
-                                    backgroundColor: AppColors.problema,
-                                  ),
-                                );
-                              }
-                            },
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              foregroundColor: AppColors.azulAcento,
-                              side: const BorderSide(
-                                color: AppColors.azulAcento,
+                              ),
+                              style: TextButton.styleFrom(
+                                foregroundColor: AppColors.azulAcento,
+                              ),
+                              child: const Text(
+                                '¿No tienes cuenta? Regístrate aquí',
                               ),
                             ),
-                            child: const Text(
-                              'Explorar el mapa sin registrarse',
-                            ),
-                          ),
-                        ],
-                      ),
-                  ],
+                          ],
+                        ),
+                    ],
+                  ),
                 ),
               );
             },

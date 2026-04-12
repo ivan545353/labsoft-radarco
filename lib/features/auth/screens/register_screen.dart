@@ -27,15 +27,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   void initState() {
     super.initState();
-
-    // ESCUCHA: Monitoreamos si la sesión de Supabase cambia
     _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((
       data,
     ) {
       final session = data.session;
-      // Si la sesión existe (Google nos autenticó) y la pantalla sigue abierta, la cerramos
       if (session != null && mounted) {
-        Navigator.of(context).pop();
+        // SOLUCIÓN: Limpia el historial hasta la raíz
+        Navigator.of(context).popUntil((route) => route.isFirst);
       }
     });
   }
@@ -52,10 +50,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _ejecutarRegistro() async {
     FocusScope.of(context).unfocus();
-
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     final exito = await _authController.registrarse(
       _emailController.text.trim(),
@@ -72,7 +67,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           backgroundColor: AppColors.exito,
         ),
       );
-      Navigator.pop(context);
+      // ¡ELIMINAMOS EL NAVIGATOR.POP MANUAL DE AQUÍ!
     } else if (_authController.mensajeError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
