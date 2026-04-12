@@ -77,15 +77,18 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
             ),
             actions: [
               if (estaLogueado)
-                IconButton(
-                  icon: const Icon(Icons.logout, color: AppColors.problema),
-                  onPressed: () async {
-                    await _authController.cerrarSesion();
-                    setState(() => _indiceTabActual = 0);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Sesión cerrada')),
-                    );
-                  },
+                SizedBox(
+                  width: 60, // Contenedor del icono más ancho
+                  child: IconButton(
+                    icon: const Icon(Icons.logout, color: AppColors.problema),
+                    onPressed: () async {
+                      await _authController.cerrarSesion();
+                      setState(() => _indiceTabActual = 0);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Sesión cerrada')),
+                      );
+                    },
+                  ),
                 )
               else
                 TextButton(

@@ -8,10 +8,27 @@ class HechosRepository {
   // --- 1. GUARDAR UN NUEVO REPORTE ---
   Future<void> crearHecho(HechoModel hecho) async {
     try {
-      // .insert() toma el JSON y lo guarda en la tabla 'hechos'
-      await _supabase.from('hechos').insert(hecho.toJson());
+      // 1. Obtenemos el ID de autenticación actual
+      final currentAuthId = _supabase.auth.currentUser!.id;
+
+      // 2. Buscamos el ID real del ciudadano en nuestra tabla 'usuarios'
+      final userResponse = await _supabase
+          .from('usuarios')
+          .select('id')
+          .eq('auth_id', currentAuthId)
+          .single(); // Ahora funcionará perfecto porque solo habrá 1 fila
+
+      final String ciudadanoIdReal = userResponse['id'];
+
+      // 3. Modificamos el JSON del hecho para inyectar el ID correcto
+      final hechoJson = hecho.toJson();
+      hechoJson['ciudadano_id'] = ciudadanoIdReal;
+
+      // 4. Insertamos en la base de datos
+      await _supabase.from('hechos').insert(hechoJson);
     } catch (e) {
-      throw Exception('Error al guardar el reporte en la base de datos: $e');
+      // Si algo falla, lanzamos el error para que la UI (el SnackBar rojo) lo muestre
+      throw Exception('Error de base de datos: $e');
     }
   }
 
