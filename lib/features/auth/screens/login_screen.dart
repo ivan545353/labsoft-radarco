@@ -55,9 +55,25 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // --- NUEVA FUNCIÓN: Mostrar el Dialog de Recuperación ---
+  // --- NUEVA FUNCIÓN: Inicio de sesión con Google ---
+  Future<void> _ejecutarLoginConGoogle() async {
+    FocusScope.of(context).unfocus();
+    await _authController.entrarConGoogle();
+
+    // Si la redirección falla antes de abrir el navegador web, mostramos el error
+    if (!mounted) return;
+    if (_authController.mensajeError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_authController.mensajeError!),
+          backgroundColor: AppColors.problema,
+        ),
+      );
+    }
+  }
+
+  // --- FUNCIÓN: Mostrar el Dialog de Recuperación ---
   void _mostrarDialogoRecuperacion() {
-    // Si el usuario ya había escrito algo en el campo de email, lo usamos por defecto
     final emailRecuperacionController = TextEditingController(
       text: _emailController.text,
     );
@@ -68,8 +84,7 @@ class _LoginScreenState extends State<LoginScreen> {
         return AlertDialog(
           title: const Text('Recuperar Contraseña'),
           content: Column(
-            mainAxisSize:
-                MainAxisSize.min, // Para que no ocupe toda la pantalla
+            mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
                 'Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.',
@@ -89,7 +104,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context), // Cierra el diálogo
+              onPressed: () => Navigator.pop(context),
               child: const Text(
                 'Cancelar',
                 style: TextStyle(color: Colors.grey),
@@ -97,20 +112,16 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
-                // Cerramos el teclado
                 FocusScope.of(context).unfocus();
 
-                // Usamos nuestro controlador
                 final exito = await _authController.recuperarContrasena(
                   emailRecuperacionController.text.trim(),
                 );
 
                 if (!mounted) return;
 
-                // Cerramos el Dialog
                 Navigator.pop(context);
 
-                // Mostramos el feedback en la pantalla principal
                 if (exito) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -170,13 +181,15 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       keyboardType: TextInputType.emailAddress,
                       validator: (value) {
-                        if (value == null || value.isEmpty)
+                        if (value == null || value.isEmpty) {
                           return 'Por favor ingresa tu correo.';
+                        }
                         final bool emailValido = RegExp(
                           r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+",
                         ).hasMatch(value);
-                        if (!emailValido)
+                        if (!emailValido) {
                           return 'Ingresa un correo electrónico válido.';
+                        }
                         return null;
                       },
                     ),
@@ -190,13 +203,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       obscureText: true,
                       validator: (value) {
-                        if (value == null || value.isEmpty)
+                        if (value == null || value.isEmpty) {
                           return 'Por favor ingresa tu contraseña.';
+                        }
                         return null;
                       },
                     ),
 
-                    // --- NUEVO: Botón de olvidar contraseña alineado a la derecha ---
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton(
@@ -209,7 +222,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: const Text('¿Olvidaste tu contraseña?'),
                       ),
                     ),
-                    const SizedBox(height: 10), // Ajustamos el espaciado
+                    const SizedBox(height: 10),
 
                     if (_authController.estaCargando)
                       const Center(child: CircularProgressIndicator())
@@ -217,6 +230,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          // --- Botón tradicional de Iniciar Sesión ---
                           Container(
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
@@ -252,6 +266,31 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           const SizedBox(height: 12),
+                          // --- NUEVO: Botón de Google ---
+                          OutlinedButton.icon(
+                            onPressed: _ejecutarLoginConGoogle,
+                            icon: Image.network(
+                              'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png',
+                              height: 24,
+                            ),
+                            label: const Text(
+                              'Ingresar con Google',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.black87,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(30),
+                              ),
+                              side: BorderSide(color: Colors.grey.shade300),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
                           TextButton(
                             onPressed: () {
                               Navigator.push(

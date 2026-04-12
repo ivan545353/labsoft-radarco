@@ -90,7 +90,10 @@ class AuthRepository {
 
   // --- NUEVO: Inicio de Sesión / Registro con Google ---
   Future<bool> iniciarSesionConGoogle() async {
-    // Supabase se encarga de abrir el navegador y gestionar el OAuth
-    return await _supabase.auth.signInWithOAuth(OAuthProvider.google);
+    return await _supabase.auth.signInWithOAuth(
+      OAuthProvider.google,
+      // Aquí va el Deep Link, en la capa de datos
+      redirectTo: 'radarciudadano://login-callback/',
+    );
   }
 }

@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_colors.dart';
 import '../controllers/auth_controller.dart';
 
@@ -19,8 +21,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   final AuthController _authController = AuthController();
 
+  // Variable para controlar la suscripción al estado de autenticación
+  late final StreamSubscription<AuthState> _authSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // ESCUCHA: Monitoreamos si la sesión de Supabase cambia
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((
+      data,
+    ) {
+      final session = data.session;
+      // Si la sesión existe (Google nos autenticó) y la pantalla sigue abierta, la cerramos
+      if (session != null && mounted) {
+        Navigator.of(context).pop();
+      }
+    });
+  }
+
   @override
   void dispose() {
+    _authSubscription.cancel(); // ¡Crucial para evitar fugas de memoria!
     _emailController.dispose();
     _passwordController.dispose();
     _aliasController.dispose();
@@ -61,10 +83,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  // --- NUEVA FUNCIÓN: Registro con Google ---
+  Future<void> _ejecutarRegistroConGoogle() async {
+    FocusScope.of(context).unfocus();
+    await _authController.entrarConGoogle();
+
+    if (!mounted) return;
+    if (_authController.mensajeError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_authController.mensajeError!),
+          backgroundColor: AppColors.problema,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Sumarse al Radar')),
+      appBar: AppBar(title: const Text('Sumarse a RadarCO')),
       body: Padding(
         padding: const EdgeInsets.all(20.0),
         child: ListenableBuilder(
@@ -74,6 +112,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
               key: _formKey,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment
+                    .stretch, // Estiramos los elementos a lo ancho
                 children: [
                   SvgPicture.asset('assets/logo.svg', height: 80),
                   const SizedBox(height: 40),
@@ -138,39 +178,70 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   const SizedBox(height: 30),
 
                   if (_authController.estaCargando)
-                    const CircularProgressIndicator()
+                    const Center(child: CircularProgressIndicator())
                   else
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [
-                            AppColors.azulPrimario,
-                            AppColors.azulAcento,
-                          ],
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                        ),
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      child: ElevatedButton(
-                        onPressed: _ejecutarRegistro,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          minimumSize: const Size(double.infinity, 50),
-                          shape: RoundedRectangleBorder(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // --- BOTÓN TRADICIONAL DE REGISTRO ---
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [
+                                AppColors.azulPrimario,
+                                AppColors.azulAcento,
+                              ],
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                            ),
                             borderRadius: BorderRadius.circular(30),
                           ),
-                        ),
-                        child: const Text(
-                          'Crear mi cuenta',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
+                          child: ElevatedButton(
+                            onPressed: _ejecutarRegistro,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(30),
+                              ),
+                            ),
+                            child: const Text(
+                              'Crear mi cuenta',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                        const SizedBox(height: 16),
+                        // --- NUEVO BOTÓN DE GOOGLE ---
+                        OutlinedButton.icon(
+                          onPressed: _ejecutarRegistroConGoogle,
+                          icon: Image.network(
+                            'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png',
+                            height: 24,
+                          ),
+                          label: const Text(
+                            'Registrarse con Google',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                            side: BorderSide(color: Colors.grey.shade300),
+                          ),
+                        ),
+                      ],
                     ),
                 ],
               ),

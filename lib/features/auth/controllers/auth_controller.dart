@@ -150,18 +150,20 @@ class AuthController extends ChangeNotifier {
     }
   }
 
-  // --- NUEVO: Caso de uso para Google ---
+  // --- CASO DE USO: Inicio de sesión con Google ---
   Future<void> entrarConGoogle() async {
     _mensajeError = null;
     _setEstadoCargando(true);
     try {
-      // Nota: No retornamos un bool porque signInWithOAuth redirige la app al navegador.
-      // Cuando el navegador vuelve, el AuthGate detecta la sesión automáticamente.
+      // Le da la orden al repositorio de abrir el navegador
       await _repository.iniciarSesionConGoogle();
     } catch (e) {
       _manejarError(e);
+    } finally {
+      // ¡LA SOLUCIÓN! Apagamos la carga.
+      // Cuando el usuario vuelva del navegador (con éxito o cancelando),
+      // la interfaz estará libre y el AuthGate se encargará de moverlo al mapa automáticamente.
       _setEstadoCargando(false);
     }
-    // No ponemos _setEstadoCargando(false) en finally porque la app se va al navegador
   }
 }
