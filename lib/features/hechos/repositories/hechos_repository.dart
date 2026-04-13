@@ -35,20 +35,28 @@ class HechosRepository {
   // --- 2. DESCARGAR REPORTES PARA EL MAPA ---
   Future<List<HechoModel>> obtenerHechosActivos() async {
     try {
-      // Hacemos una consulta SELECT a Supabase
       final response = await _supabase
           .from('hechos')
-          .select()
-          .eq('estado', 'activo'); // Solo traemos los que no han sido resueltos
+          // .select('*, usuarios(nombre, avatar_url, reputacion)') <-- ESTO CAUSABA EL ERROR
+          .select(
+            '*',
+          ) // Volvemos al select simple hasta que creemos la tabla usuarios
+          .eq('estado', 'activo')
+          .order('creado_en', ascending: false);
 
-      // Convertimos la respuesta cruda de Supabase (Lista de JSON)
-      // en una Lista de objetos HechoModel que Flutter pueda entender
-      final List<dynamic> datos = response;
-      return datos
-          .map((json) => HechoModel.fromJson(json as Map<String, dynamic>))
-          .toList();
+      return (response as List).map((json) {
+        final map = Map<String, dynamic>.from(json);
+
+        // Como quitamos el join, mapeamos los campos del autor como nulos directamente
+        // El HechoModel y la Interfaz ya están preparados para manejar esto mágicamente.
+        map['nombre_autor'] = null;
+        map['avatar_autor'] = null;
+        map['reputacion_autor'] = null;
+
+        return HechoModel.fromJson(map);
+      }).toList();
     } catch (e) {
-      throw Exception('Error al descargar los reportes: $e');
+      throw Exception('Error al obtener hechos: $e');
     }
   }
 

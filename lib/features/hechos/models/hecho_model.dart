@@ -7,8 +7,12 @@ class HechoModel {
   final String fotoUrl;
   final String estado;
   final DateTime creadoEn;
-  // NUEVO CAMPO Opcional
   final String? descripcion;
+
+  // NUEVOS CAMPOS: Datos del Autor (provenientes de la tabla 'usuarios')
+  final String? nombreAutor;
+  final String? avatarAutor;
+  final int? reputacionAutor;
 
   HechoModel({
     required this.id,
@@ -19,7 +23,10 @@ class HechoModel {
     required this.fotoUrl,
     required this.estado,
     required this.creadoEn,
-    this.descripcion, // Nuevo
+    this.descripcion,
+    this.nombreAutor,
+    this.avatarAutor,
+    this.reputacionAutor,
   });
 
   factory HechoModel.fromJson(Map<String, dynamic> json) {
@@ -32,8 +39,11 @@ class HechoModel {
       fotoUrl: json['foto_url'] as String,
       estado: json['estado'] as String,
       creadoEn: DateTime.parse(json['creado_en'] as String),
-      // Mapeo del nuevo campo
       descripcion: json['descripcion'] as String?,
+      // Mapeo de los datos del join (si existen)
+      nombreAutor: json['nombre_autor'] as String?,
+      avatarAutor: json['avatar_autor'] as String?,
+      reputacionAutor: json['reputacion_autor'] as int?,
     );
   }
 
@@ -45,7 +55,6 @@ class HechoModel {
       'longitud': longitud,
       'foto_url': fotoUrl,
       'estado': estado,
-      // Inclusión en el JSON
       'descripcion': descripcion,
     };
   }
