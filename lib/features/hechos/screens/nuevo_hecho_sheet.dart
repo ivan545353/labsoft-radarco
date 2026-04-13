@@ -27,6 +27,9 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
   // Controlador para capturar lo que el usuario escribe
   final TextEditingController _descripcionController = TextEditingController();
 
+  // NUEVO: Variable para controlar el error visual
+  String? _errorDescripcion;
+
   @override
   void initState() {
     super.initState();
@@ -167,7 +170,13 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.grey[200]!),
+                // Si hay error, el borde se pinta de rojo
+                border: Border.all(
+                  color: _errorDescripcion != null
+                      ? Colors.red
+                      : Colors.grey[200]!,
+                  width: _errorDescripcion != null ? 1.5 : 1.0,
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.03),
@@ -179,6 +188,12 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
               child: TextField(
                 controller: _descripcionController,
                 maxLines: 4,
+                // NUEVO: Si el usuario empieza a escribir, limpiamos el error
+                onChanged: (valor) {
+                  if (_errorDescripcion != null) {
+                    setState(() => _errorDescripcion = null);
+                  }
+                },
                 decoration: InputDecoration(
                   hintText:
                       '¿Qué estás viendo? Danos algunos detalles para el equipo de la ciudad...',
@@ -188,6 +203,19 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
                 ),
               ),
             ),
+            // NUEVO: Texto de error debajo de la caja
+            if (_errorDescripcion != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8, left: 16),
+                child: Text(
+                  _errorDescripcion!,
+                  style: const TextStyle(
+                    color: Colors.red,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
 
             const SizedBox(height: 24),
 
@@ -345,6 +373,17 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
   }
 
   void _enviarReporte() async {
+    final textoDescripcion = _descripcionController.text.trim();
+
+    // --- VALIDACIÓN VISUAL ---
+    if (textoDescripcion.isEmpty) {
+      setState(() {
+        _errorDescripcion = 'Por favor, describe el hecho para la comunidad.';
+      });
+      return;
+    }
+    // ------------------------
+
     final nuevoHecho = HechoModel(
       id: '',
       ciudadanoId: widget.ciudadanoId,
@@ -354,8 +393,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
       fotoUrl: 'https://via.placeholder.com/150',
       estado: 'activo',
       creadoEn: DateTime.now(),
-      descripcion: _descripcionController.text
-          .trim(), // Capturamos la descripción real
+      descripcion: textoDescripcion,
     );
 
     final exito = await widget.controller.publicarNuevoHecho(nuevoHecho);
@@ -364,6 +402,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
 
     if (exito) {
       Navigator.pop(context);
+      // El SnackBar de éxito SÍ está bien aquí porque el BottomSheet ya se cerró con el "pop"
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('¡Reporte publicado con éxito!'),

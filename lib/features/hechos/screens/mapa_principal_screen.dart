@@ -9,6 +9,7 @@ import '../controllers/hechos_controller.dart';
 import 'nuevo_hecho_sheet.dart';
 import 'comunidad_feed_screen.dart';
 import 'hecho_detalle_screen.dart';
+import '../models/hecho_model.dart';
 
 class MapaPrincipalScreen extends StatefulWidget {
   const MapaPrincipalScreen({super.key});
@@ -117,30 +118,34 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
               child: vistas[_indiceTabActual],
             ),
           ),
-
+          //quiero que este boton flotante este un poco mas arriba
           // --- BOTÓN FLOTANTE ---
           floatingActionButton: (_indiceTabActual == 0 || _indiceTabActual == 1)
-              ? FloatingActionButton(
-                  onPressed: () {
-                    _verificarAccesoCiudadano(() {
-                      final userId =
-                          Supabase.instance.client.auth.currentUser!.id;
+              ? Padding(
+                  // ¡Este es el margen que eleva el botón!
+                  // 30px suele alinearlo perfectamente con la tarjeta que está a 70px.
+                  padding: const EdgeInsets.only(bottom: 40.0),
+                  child: FloatingActionButton(
+                    onPressed: () {
+                      _verificarAccesoCiudadano(() {
+                        final userId =
+                            Supabase.instance.client.auth.currentUser!.id;
 
-                      showModalBottomSheet(
-                        context: context,
-                        isScrollControlled: true,
-                        backgroundColor: Colors.transparent,
-                        builder: (context) => NuevoHechoSheet(
-                          ciudadanoId: userId,
-                          // ¡El botón ahora encuentra el controlador sin problemas!
-                          controller: _hechosController,
-                        ),
-                      );
-                    });
-                  },
-                  backgroundColor: AppColors.azulPrimario,
-                  elevation: 8,
-                  child: const Icon(Icons.add, color: Colors.white, size: 30),
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (context) => NuevoHechoSheet(
+                            ciudadanoId: userId,
+                            controller: _hechosController,
+                          ),
+                        );
+                      });
+                    },
+                    backgroundColor: AppColors.azulPrimario,
+                    elevation: 8,
+                    child: const Icon(Icons.add, color: Colors.white, size: 30),
+                  ),
                 )
               : null,
           floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
@@ -224,22 +229,22 @@ class _VistaMapaInteractiva extends StatefulWidget {
 
 class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
   static const CameraPosition _puntoInicial = CameraPosition(
-    target: LatLng(-46.4389, -67.5191), // Caleta Olivia
+    target: LatLng(-46.4389, -67.5191),
     zoom: 14.0,
   );
+
+  // NUEVO: Estado para saber qué pin está seleccionado
+  HechoModel? _hechoSeleccionado;
 
   @override
   void initState() {
     super.initState();
 
-    // Le enseñamos al controlador cómo abrir la pantalla
+    // Ahora el callback NO navega de golpe, sino que guarda el hecho y levanta la tarjeta
     widget.controlador.setAbrirDetalleCallback((hechoTocado) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => HechoDetalleScreen(hecho: hechoTocado),
-        ),
-      );
+      setState(() {
+        _hechoSeleccionado = hechoTocado;
+      });
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -249,11 +254,8 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
     });
   }
 
-  // Ya no necesitamos el dispose() aquí porque se maneja en la clase padre
-
   @override
   Widget build(BuildContext context) {
-    // Escuchamos al controlador prestado
     return ListenableBuilder(
       listenable: widget.controlador,
       builder: (context, child) {
@@ -265,9 +267,16 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
               myLocationEnabled: true,
               myLocationButtonEnabled: false,
               zoomControlsEnabled: false,
-              // Pintamos los marcadores usando el controlador del padre
               markers: widget.controlador.marcadores,
+              // NUEVO: Si tocan en un lugar vacío del mapa, escondemos la tarjeta
+              onTap: (LatLng posicion) {
+                if (_hechoSeleccionado != null) {
+                  setState(() => _hechoSeleccionado = null);
+                }
+              },
             ),
+
+            // Indicador de carga
             if (widget.controlador.estaCargando)
               const Positioned(
                 top: 100,
@@ -283,9 +292,116 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
                   ),
                 ),
               ),
+
+            // NUEVO: LA MINI-TARJETA ANIMADA (Estilo Uber/Airbnb)
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+              bottom: _hechoSeleccionado != null
+                  ? 55
+                  : -150, // Se desliza desde abajo
+              left: 20,
+              right: 90,
+              child: _hechoSeleccionado == null
+                  ? const SizedBox.shrink()
+                  : _buildTarjetaPrevisualizacion(context, _hechoSeleccionado!),
+            ),
           ],
         );
       },
+    );
+  }
+
+  // Diseño de la Mini-Tarjeta
+  Widget _buildTarjetaPrevisualizacion(BuildContext context, HechoModel hecho) {
+    Color colorCategoria = hecho.tipoHecho == 'problema'
+        ? Colors.red
+        : hecho.tipoHecho == 'alerta'
+        ? Colors.orange
+        : hecho.tipoHecho == 'positivo'
+        ? Colors.green
+        : Colors.blue;
+
+    return GestureDetector(
+      onTap: () {
+        // Al tocar esta tarjeta clara e intuitiva, AHORA SÍ vamos al detalle
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => HechoDetalleScreen(hecho: hecho),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // Círculo de color dinámico según la categoría
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: colorCategoria.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.location_on, color: colorCategoria),
+            ),
+            const SizedBox(width: 16),
+            // Textos
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    hecho.tipoHecho.toUpperCase(),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 10,
+                      color: colorCategoria,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    hecho.descripcion ?? 'Reporte sin descripción',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: Colors.blueGrey[900],
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow
+                        .ellipsis, // Pone "..." si el texto es muy largo
+                  ),
+                ],
+              ),
+            ),
+            // Indicador visual de "tocar aquí"
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.arrow_forward_ios,
+                color: Colors.grey,
+                size: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

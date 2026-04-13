@@ -79,18 +79,13 @@ class HechosController extends ChangeNotifier {
           markerId: MarkerId(hecho.id),
           position: LatLng(hecho.latitud, hecho.longitud),
           icon: iconDescriptor,
-          // LA INFO WINDOW SE QUEDA COMO ESTÁ
-          infoWindow: InfoWindow(
-            title: hecho.tipoHecho.toUpperCase(),
-            snippet: hecho.descripcion != null && hecho.descripcion!.isNotEmpty
-                ? hecho.descripcion
-                : 'Estado: ${hecho.estado}',
-            // AGREGAMOS EL ONTAP AQUÍ
-            onTap: () {
-              // Notificamos que se tocó este hecho específico
-              _abrirDetalleCallback?.call(hecho);
-            },
-          ),
+          // 1. ELIMINAMOS la propiedad 'infoWindow' por completo.
+
+          // 2. Le pasamos la acción directamente al Pin.
+          onTap: () {
+            // Ahora, al tocar el pin (un solo toque), notificamos a la pantalla
+            _abrirDetalleCallback?.call(hecho);
+          },
         ),
       );
     }
