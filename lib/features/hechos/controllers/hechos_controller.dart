@@ -19,6 +19,13 @@ class HechosController extends ChangeNotifier {
   Set<Marker> _marcadores = {};
   Set<Marker> get marcadores => _marcadores;
 
+  // Variable para guardar la función de navegación
+  Function(HechoModel)? _abrirDetalleCallback;
+  // Método para registrar la función desde la pantalla
+  void setAbrirDetalleCallback(Function(HechoModel) callback) {
+    _abrirDetalleCallback = callback;
+  }
+
   Future<void> cargarHechos() async {
     _estaCargando = true;
     _mensajeError = null;
@@ -71,14 +78,18 @@ class HechosController extends ChangeNotifier {
         Marker(
           markerId: MarkerId(hecho.id),
           position: LatLng(hecho.latitud, hecho.longitud),
-          // Inyección del ícono personalizado
           icon: iconDescriptor,
+          // LA INFO WINDOW SE QUEDA COMO ESTÁ
           infoWindow: InfoWindow(
             title: hecho.tipoHecho.toUpperCase(),
             snippet: hecho.descripcion != null && hecho.descripcion!.isNotEmpty
-                ? hecho
-                      .descripcion // UX: Mostramos la descripción si existe
+                ? hecho.descripcion
                 : 'Estado: ${hecho.estado}',
+            // AGREGAMOS EL ONTAP AQUÍ
+            onTap: () {
+              // Notificamos que se tocó este hecho específico
+              _abrirDetalleCallback?.call(hecho);
+            },
           ),
         ),
       );

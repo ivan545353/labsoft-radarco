@@ -7,6 +7,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../controllers/hechos_controller.dart';
 import 'nuevo_hecho_sheet.dart';
+import 'comunidad_feed_screen.dart';
+import 'hecho_detalle_screen.dart';
 
 class MapaPrincipalScreen extends StatefulWidget {
   const MapaPrincipalScreen({super.key});
@@ -47,7 +49,8 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
   // Le pasamos el controlador prestado al mapa
   Widget get _vistaMapa =>
       _VistaMapaInteractiva(controlador: _hechosController);
-  Widget get _vistaComunidad => const _VistaComunidadFeed();
+  Widget get _vistaComunidad =>
+      ComunidadFeedScreen(controlador: _hechosController);
   Widget get _vistaActividad => const _VistaActividadNotificaciones();
   Widget get _vistaPerfil => const _VistaPerfilUsuario();
 
@@ -228,8 +231,22 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
   @override
   void initState() {
     super.initState();
-    // Usamos widget.controlador para descargar los datos al iniciar
-    widget.controlador.cargarHechos();
+
+    // Le enseñamos al controlador cómo abrir la pantalla
+    widget.controlador.setAbrirDetalleCallback((hechoTocado) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HechoDetalleScreen(hecho: hechoTocado),
+        ),
+      );
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.controlador.hechosActivos.isEmpty) {
+        widget.controlador.cargarHechos();
+      }
+    });
   }
 
   // Ya no necesitamos el dispose() aquí porque se maneja en la clase padre
@@ -269,22 +286,6 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
           ],
         );
       },
-    );
-  }
-}
-
-class _VistaComunidadFeed extends StatelessWidget {
-  const _VistaComunidadFeed();
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.fondoGeneral,
-      child: const Center(
-        child: Text(
-          'Feed de la Comunidad\n(Aquí irán las tarjetas de reportes)',
-          textAlign: TextAlign.center,
-        ),
-      ),
     );
   }
 }
