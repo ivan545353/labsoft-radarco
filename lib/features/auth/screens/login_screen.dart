@@ -19,7 +19,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   final AuthController _authController = AuthController();
 
-  // Escuchador para cerrar la pantalla si Google nos loguea
   late final StreamSubscription<AuthState> _authSubscription;
 
   @override
@@ -29,7 +28,7 @@ class _LoginScreenState extends State<LoginScreen> {
       data,
     ) {
       if (data.session != null && mounted) {
-        // SOLUCIÓN: Limpia todo el historial de pantallas y vuelve a la raíz (el mapa)
+        // Cierra el login y vuelve al mapa
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
     });
@@ -55,16 +54,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!mounted) return;
 
-    if (exito) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('¡Bienvenido de nuevo!'),
-          backgroundColor: AppColors.exito,
-          duration: Duration(seconds: 2),
-        ),
-      );
-      // ¡ELIMINAMOS EL NAVIGATOR.POP MANUAL DE AQUÍ! El listener se encargará de cerrarlo.
-    } else if (_authController.mensajeError != null) {
+    // SOLUCIÓN RACE CONDITION: Si hay éxito, no mostramos SnackBar aquí,
+    // porque el listener ya cerró esta pantalla. Solo reaccionamos si hay error.
+    if (!exito && _authController.mensajeError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(_authController.mensajeError!),
@@ -166,10 +158,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ), // AppBar por si quieren volver atrás
+      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -264,8 +253,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             const SizedBox(height: 12),
                             OutlinedButton.icon(
                               onPressed: _ejecutarLoginConGoogle,
+                              // USAMOS LA URL OFICIAL Y LIVIANA DE GOOGLE
                               icon: Image.network(
-                                'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png',
+                                'https://developers.google.com/identity/images/g-logo.png',
                                 height: 24,
                               ),
                               label: const Text(
