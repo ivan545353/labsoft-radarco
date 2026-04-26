@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/hecho_model.dart';
 import '../repositories/hechos_repository.dart';
 import '../../../core/utils/map_marker_utils.dart';
@@ -104,6 +105,102 @@ class HechosController extends ChangeNotifier {
       _estaCargando = false;
       notifyListeners();
       return false;
+    }
+  }
+
+  // --- NUEVO: Método para enviar validaciones desde la UI ---
+  Future<bool> enviarInteraccion(String hechoId, String tipoInteraccion) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      _mensajeError = 'Debes iniciar sesión para participar.';
+      notifyListeners();
+      return false;
+    }
+
+    try {
+      // 1. TRADUCCIÓN DE ID: Buscamos el ID público del ciudadano usando su Auth ID
+      final usuarioData = await Supabase.instance.client
+          .from('usuarios')
+          .select('id')
+          .eq('auth_id', user.id)
+          .single();
+
+      final ciudadanoIdReal = usuarioData['id'];
+
+      // 2. ENVIAR A LA BD: Ahora usamos el ID correcto que la llave foránea espera
+      await _repository.registrarInteraccion(
+        hechoId: hechoId,
+        ciudadanoId: ciudadanoIdReal,
+        tipoInteraccion: tipoInteraccion,
+      );
+      return true;
+    } catch (e) {
+      _mensajeError = 'Error al registrar tu voto.';
+      // Esto imprimirá el error real en la consola azul por si vuelve a fallar
+      debugPrint('Error CRÍTICO en Interacción: $e');
+      return false;
+    }
+  }
+
+  // --- NUEVO: Verificar qué botones deben estar encendidos al abrir la pantalla ---
+  Future<List<String>> cargarMisInteracciones(String hechoId) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return []; // Si es anónimo, no tiene interacciones
+
+    try {
+      final usuarioData = await Supabase.instance.client
+          .from('usuarios')
+          .select('id')
+          .eq('auth_id', user.id)
+          .single();
+
+      return await _repository.obtenerInteraccionesUsuario(
+        hechoId,
+        usuarioData['id'],
+      );
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // --- NUEVO: Quitar el Upvote ---
+  Future<bool> quitarInteraccion(String hechoId, String tipoInteraccion) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return false;
+
+    try {
+      final usuarioData = await Supabase.instance.client
+          .from('usuarios')
+          .select('id')
+          .eq('auth_id', user.id)
+          .single();
+
+      await _repository.eliminarInteraccion(
+        hechoId,
+        usuarioData['id'],
+        tipoInteraccion,
+      );
+      return true;
+    } catch (e) {
+      debugPrint('Error al quitar interacción: $e');
+      return false;
+    }
+  }
+
+  // --- NUEVO: Puente para obtener los conteos ---
+  Future<Map<String, int>> obtenerConteoInteracciones(String hechoId) async {
+    return await _repository.obtenerConteoInteracciones(hechoId);
+  }
+
+  // --- NUEVO: Puente para obtener un único hecho actualizado ---
+  Future<HechoModel?> obtenerHechoPorId(String id) async {
+    try {
+      // Llamamos al repositorio que ya tiene la lógica del JOIN con usuarios
+      return await _repository.obtenerHechoPorId(id);
+    } catch (e) {
+      _mensajeError = 'Error al refrescar el reporte: $e';
+      notifyListeners();
+      return null;
     }
   }
 }

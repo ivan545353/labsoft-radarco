@@ -28,7 +28,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
   LatLng? _posicionActual;
   String? _errorDescripcion;
 
-  // NUEVO: Variables para la cámara
+  // Variables para la cámara
   File? _imagenSeleccionada;
   bool _subiendoDatos = false;
   final ImagePicker _picker = ImagePicker();
@@ -62,10 +62,8 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
     }
   }
 
-  // NUEVO: Método para abrir la cámara o galería
+  // Método para abrir la cámara o galería
   Future<void> _seleccionarImagen() async {
-    // Te damos la opción de abrir la cámara (ideal para teléfono real)
-    // o la galería (ideal para probar en el emulador)
     final XFile? imagenEscogida = await _picker.pickImage(
       source: ImageSource
           .camera, // Cambia a ImageSource.gallery si prefieres probar fotos guardadas
@@ -82,23 +80,27 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
     }
   }
 
-  // NUEVO: Método para subir la foto a Supabase Storage
-  Future<String?> _subirImagenASupabase(File archivoImagen) async {
+  // NUEVO: Ahora recibe el ID real para organizar la foto en la carpeta correcta del Storage
+  Future<String?> _subirImagenASupabase(
+    File archivoImagen,
+    String ciudadanoIdReal,
+  ) async {
     try {
       final supabase = Supabase.instance.client;
       // Creamos un nombre único basado en el tiempo para no sobreescribir fotos
       final extension = archivoImagen.path.split('.').last;
       final nombreArchivo =
           '${DateTime.now().millisecondsSinceEpoch}.$extension';
-      final rutaArchivo =
-          '${widget.ciudadanoId}/$nombreArchivo'; // Organizamos por carpetas de usuario
+
+      // Organizamos por carpetas usando el ID público del usuario
+      final rutaArchivo = '$ciudadanoIdReal/$nombreArchivo';
 
       // Subimos al bucket 'fotos_hechos'
       await supabase.storage
           .from('fotos_hechos')
           .upload(rutaArchivo, archivoImagen);
 
-      // Obtenemos la URL pública para guardarla en la tabla de PostgreSQL
+      // Obtenemos la URL pública
       final urlPublica = supabase.storage
           .from('fotos_hechos')
           .getPublicUrl(rutaArchivo);
@@ -121,7 +123,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
       return;
     }
 
-    // 2. Validar que haya tomado una foto (HU1.1 obliga a subir foto)
+    // 2. Validar que haya tomado una foto
     if (_imagenSeleccionada == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -145,53 +147,87 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
 
     setState(() => _subiendoDatos = true);
 
-    // 4. Subir imagen primero
-    final urlFotoReal = await _subirImagenASupabase(_imagenSeleccionada!);
+    try {
+      // 4. TRADUCCIÓN DE ID: Buscamos el ID público del ciudadano actual
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
 
-    if (urlFotoReal == null) {
+      if (user == null) {
+        throw Exception('No hay una sesión activa.');
+      }
+
+      final usuarioData = await supabase
+          .from('usuarios')
+          .select('id')
+          .eq('auth_id', user.id)
+          .single();
+
+      final ciudadanoIdReal = usuarioData['id'];
+
+      // 5. Subir imagen asociándola al ID real
+      final urlFotoReal = await _subirImagenASupabase(
+        _imagenSeleccionada!,
+        ciudadanoIdReal,
+      );
+
+      if (urlFotoReal == null) {
+        setState(() => _subiendoDatos = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Error al subir la foto. Intenta nuevamente.'),
+              backgroundColor: AppColors.problema,
+            ),
+          );
+        }
+        return;
+      }
+
+      // 6. Crear el modelo inyectando el ID PÚBLICO
+      final nuevoHecho = HechoModel(
+        id: '',
+        ciudadanoId: ciudadanoIdReal, // <--- Aquí usamos el dato correcto
+        tipoHecho: _tipoSeleccionado,
+        latitud: _posicionActual!.latitude,
+        longitud: _posicionActual!.longitude,
+        fotoUrl: urlFotoReal,
+        estado: 'activo',
+        creadoEn: DateTime.now(),
+        descripcion: textoDescripcion,
+      );
+
+      // 7. Enviar a base de datos
+      final exito = await widget.controller.publicarNuevoHecho(nuevoHecho);
+
+      if (!mounted) return;
       setState(() => _subiendoDatos = false);
-      if (mounted) {
+
+      if (exito) {
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Error al subir la foto. Intenta nuevamente.'),
+            // Agregamos el detalle de los puntos ganados para fomentar la participación
+            content: Text('¡Reporte publicado con éxito! (+15 pts)'),
+            backgroundColor: AppColors.exito,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              widget.controller.mensajeError ?? 'Error al publicar',
+            ),
             backgroundColor: AppColors.problema,
           ),
         );
       }
-      return;
-    }
-
-    // 5. Crear el modelo con la URL real
-    final nuevoHecho = HechoModel(
-      id: '',
-      ciudadanoId: widget.ciudadanoId,
-      tipoHecho: _tipoSeleccionado,
-      latitud: _posicionActual!.latitude,
-      longitud: _posicionActual!.longitude,
-      fotoUrl: urlFotoReal, // ¡Mágia conectada!
-      estado: 'activo',
-      creadoEn: DateTime.now(),
-      descripcion: textoDescripcion,
-    );
-
-    // 6. Enviar a base de datos
-    final exito = await widget.controller.publicarNuevoHecho(nuevoHecho);
-
-    if (!mounted) return;
-    setState(() => _subiendoDatos = false);
-
-    if (exito) {
-      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _subiendoDatos = false);
+      debugPrint('Error crítico al enviar reporte: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('¡Reporte publicado con éxito!'),
-          backgroundColor: AppColors.exito,
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(widget.controller.mensajeError ?? 'Error al publicar'),
+          content: Text('Error de conexión. Intenta nuevamente.'),
           backgroundColor: AppColors.problema,
         ),
       );
@@ -266,7 +302,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
                             _imagenSeleccionada!,
                             fit: BoxFit.cover,
                             width: double.infinity,
-                          ) // Muestra la foto tomada
+                          )
                         : Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -369,8 +405,9 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
                   controller: _descripcionController,
                   maxLines: 4,
                   onChanged: (valor) {
-                    if (_errorDescripcion != null)
+                    if (_errorDescripcion != null) {
                       setState(() => _errorDescripcion = null);
+                    }
                   },
                   decoration: InputDecoration(
                     hintText:
@@ -437,7 +474,6 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
   }
 }
 
-// ... Mantén tu widget privado _CategoriaChip idéntico al final del archivo ...
 class _CategoriaChip extends StatelessWidget {
   final String label;
   final IconData icon;

@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_colors.dart';
 import '../models/hecho_model.dart';
 import '../../auth/screens/login_screen.dart';
+import '../controllers/hechos_controller.dart';
+import 'package:share_plus/share_plus.dart';
 
 class HechoDetalleScreen extends StatefulWidget {
   final HechoModel hecho;
@@ -18,13 +20,30 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
   bool _dioLike = false;
   bool _votoSiguePasando = false;
   bool _votoResuelto = false;
+  bool _cargandoEstado = true;
+  int _conteoSiguePasando = 0;
+  int _conteoResuelto = 0;
+  late String _estadoActual;
+
+  final HechosController _hechosController = HechosController();
+
+  @override
+  void initState() {
+    super.initState();
+    _estadoActual = widget.hecho.estado;
+    _sincronizarEstadoPrevio();
+  }
 
   String _tiempoTranscurrido(DateTime fecha) {
     final diferencia = DateTime.now().difference(fecha);
-    if (diferencia.inDays > 0) return 'Reportado hace ${diferencia.inDays} d';
-    if (diferencia.inHours > 0) return 'Reportado hace ${diferencia.inHours} h';
-    if (diferencia.inMinutes > 0)
-      return 'Reportado hace ${diferencia.inMinutes} min';
+    if (diferencia.inDays > 7) {
+      return '${fecha.day}/${fecha.month}/${fecha.year}';
+    }
+    if (diferencia.inDays > 0)
+      return 'Hace ${diferencia.inDays} ${diferencia.inDays == 1 ? 'día' : 'días'}';
+    if (diferencia.inHours > 0)
+      return 'Hace ${diferencia.inHours} ${diferencia.inHours == 1 ? 'hora' : 'horas'}';
+    if (diferencia.inMinutes > 0) return 'Hace ${diferencia.inMinutes} min';
     return 'Reportado justo ahora';
   }
 
@@ -46,9 +65,53 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
     return (reputacion / 50).floor() + 1;
   }
 
-  // --- LAZY LOGIN PARA INTERACCIONES ---
-  // Retorna 'true' si el usuario NO está logueado y lo redirige.
-  // Retorna 'false' si está logueado y puede continuar.
+  // --- RECUPERAR MEMORIA DE LA BASE DE DATOS ---
+  Future<void> _sincronizarEstadoPrevio() async {
+    // 1. REFRESCAR DATOS: Traemos la versión más reciente de este reporte desde la BD
+    final hechoActualizado = await _hechosController.obtenerHechoPorId(
+      widget.hecho.id,
+    );
+
+    if (hechoActualizado != null && mounted) {
+      setState(() {
+        _estadoActual = hechoActualizado
+            .estado; // Ahora sí dirá "resuelto" si el trigger actuó
+      });
+    }
+
+    // 2. CONTEO DE VOTOS: Cargamos el 1/3, 2/3 o 3/3 real
+    final conteos = await _hechosController.obtenerConteoInteracciones(
+      widget.hecho.id,
+    );
+
+    if (mounted) {
+      setState(() {
+        _conteoSiguePasando = conteos['sigue_pasando'] ?? 0;
+        _conteoResuelto = conteos['ya_se_resolvio'] ?? 0;
+      });
+    }
+
+    // 3. MEMORIA DEL USUARIO: Verificamos si este usuario ya votó para bloquear el botón
+    final sesionActual = Supabase.instance.client.auth.currentUser;
+    if (sesionActual == null) {
+      if (mounted) setState(() => _cargandoEstado = false);
+      return;
+    }
+
+    final interacciones = await _hechosController.cargarMisInteracciones(
+      widget.hecho.id,
+    );
+
+    if (mounted) {
+      setState(() {
+        _dioLike = interacciones.contains('upvote');
+        _votoSiguePasando = interacciones.contains('sigue_pasando');
+        _votoResuelto = interacciones.contains('ya_se_resolvio');
+        _cargandoEstado = false;
+      });
+    }
+  }
+
   bool _requiereLogin() {
     final sesionActual = Supabase.instance.client.auth.currentSession;
     if (sesionActual == null) {
@@ -56,53 +119,175 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
         context,
         MaterialPageRoute(builder: (context) => const LoginScreen()),
       );
-      return true; // Aborta la acción actual
+      return true;
     }
-    return false; // Permite que la acción continúe
+    return false;
   }
 
-  // --- LÓGICAS DE INTERACCIÓN ---
-  void _manejarLike() {
-    if (_requiereLogin()) return; // Intercepción de seguridad
+  // --- LÓGICA DE UPVOTE (PRIORIDAD) ---
+  Future<void> _manejarLike() async {
+    if (_requiereLogin() || _cargandoEstado) return;
 
-    setState(() => _dioLike = !_dioLike);
-    if (_dioLike) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('¡Gracias por apoyar este reporte!'),
-          behavior: SnackBarBehavior.floating,
-        ),
+    final estadoAnterior = _dioLike;
+    setState(() => _dioLike = !_dioLike); // Actualización optimista
+
+    bool exito;
+    if (estadoAnterior) {
+      // Si ya tenía upvote, lo quitamos
+      exito = await _hechosController.quitarInteraccion(
+        widget.hecho.id,
+        'upvote',
       );
+
+      // NUEVO: Avisamos al usuario que perdió los puntos
+      if (mounted && exito) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Prioridad retirada. (-5 pts)'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } else {
+      // Si no tenía, se lo damos
+      exito = await _hechosController.enviarInteraccion(
+        widget.hecho.id,
+        'upvote',
+      );
+
+      if (mounted && exito) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('¡Prioridad aumentada! (+5 pts)'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+
+    if (mounted && !exito) {
+      // Si falló internet o la BD, revertimos silenciosamente
+      setState(() => _dioLike = estadoAnterior);
     }
   }
 
-  void _manejarVotoSiguePasando() {
-    if (_requiereLogin()) return; // Intercepción de seguridad
+  // --- LÓGICA DE COMPARTIR ---
+  void _manejarCompartir() {
+    // Formateamos un mensaje atractivo para WhatsApp o Redes Sociales
+    final String tipoHecho = widget.hecho.tipoHecho.toUpperCase();
+    final String titulo = _obtenerEstilos()['titulo'];
+
+    // Generamos un link a Google Maps usando las coordenadas
+    final String urlMapa =
+        'https://maps.google.com/?q=${widget.hecho.latitud},${widget.hecho.longitud}';
+
+    final String mensaje =
+        '🚨 $titulo en RadarCO\n\n'
+        '📝 "${widget.hecho.descripcion}"\n\n'
+        '📍 Ubicación exacta:\n$urlMapa\n\n'
+        '¡Descarga la app de RadarCO y ayúdanos a solucionar esto juntos!';
+
+    // Ejecuta el menú nativo del celular
+    Share.share(mensaje, subject: 'Reporte ciudadano: $tipoHecho');
+  }
+
+  // --- LÓGICA PERMANENTE (VALIDACIONES) ---
+  Future<void> _manejarVotoSiguePasando() async {
+    // Bloqueado si ya votó o si el caso ya está resuelto
+    if (_requiereLogin() || _cargandoEstado || _estadoActual == 'resuelto')
+      return;
     if (_votoSiguePasando || _votoResuelto) return;
 
-    setState(() => _votoSiguePasando = true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Confirmación registrada. Ayudas a mantener el mapa actualizado.',
-        ),
-        behavior: SnackBarBehavior.floating,
-      ),
+    // UI Optimista: Registra el voto y sube el contador instantáneamente
+    setState(() {
+      _votoSiguePasando = true;
+      _conteoSiguePasando++;
+    });
+
+    final exito = await _hechosController.enviarInteraccion(
+      widget.hecho.id,
+      'sigue_pasando',
     );
+
+    if (mounted) {
+      if (exito) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Confirmación registrada. (+5 pts)'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else {
+        // Revertimos si falla
+        setState(() {
+          _votoSiguePasando = false;
+          _conteoSiguePasando--;
+        });
+      }
+    }
   }
 
-  void _manejarVotoResuelto() {
-    if (_requiereLogin()) return; // Intercepción de seguridad
+  Future<void> _manejarVotoResuelto() async {
+    if (_requiereLogin() || _cargandoEstado || _estadoActual == 'resuelto')
+      return;
     if (_votoResuelto || _votoSiguePasando) return;
 
-    setState(() => _votoResuelto = true);
+    setState(() {
+      _votoResuelto = true;
+      _conteoResuelto++;
+      // LA MAGIA: Si con este voto llegamos a 3, cambiamos toda la UI del detalle a verde
+      if (_conteoResuelto >= 3) {
+        _estadoActual = 'resuelto';
+      }
+    });
+
+    final exito = await _hechosController.enviarInteraccion(
+      widget.hecho.id,
+      'ya_se_resolvio',
+    );
+
+    if (mounted) {
+      if (exito) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Voto registrado. (+5 pts)'),
+            backgroundColor: AppColors.exito,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else {
+        setState(() {
+          _votoResuelto = false;
+          _conteoResuelto--;
+          _estadoActual = widget.hecho.estado; // Revertimos el estado maestro
+        });
+      }
+    }
+  }
+
+  void _verPerfilAutor() {
+    if (widget.hecho.ciudadanoId == null) return;
+
+    // Dejamos el Navigator listo. Por ahora puedes crear un archivo temporal
+    // o simplemente imprimir en consola para verificar que el ID llega bien.
+    debugPrint(
+      'Navegando al perfil del ciudadano: ${widget.hecho.ciudadanoId}',
+    );
+
+    /* Navigator.push(
+      context, 
+      MaterialPageRoute(
+        builder: (context) => PerfilUsuarioScreen(idUsuario: widget.hecho.ciudadanoId!)
+      )
+    );
+    */
+
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
+      SnackBar(
         content: Text(
-          'Voto registrado (1/3 necesarios para marcar como resuelto).',
+          'El perfil de ${widget.hecho.nombreAutor} estará disponible pronto.',
         ),
-        backgroundColor: AppColors.exito,
-        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 1),
       ),
     );
   }
@@ -124,20 +309,40 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
           padding: const EdgeInsets.all(16.0),
           child: Row(
             children: [
-              // Botón de Upvote animado por estado
-              IconButton(
-                onPressed: _manejarLike,
-                icon: Icon(
-                  _dioLike ? Icons.favorite : Icons.favorite_border,
-                  color: _dioLike ? Colors.redAccent : Colors.grey[400],
-                  size: 28,
+              // Botón de Prioridad (Upvote) con estilo "Solid Selection"
+              InkWell(
+                onTap: _manejarLike,
+                borderRadius: BorderRadius.circular(100),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    // Activo: Fondo azul sólido | Inactivo: Fondo transparente
+                    color: _dioLike
+                        ? AppColors.azulPrimario
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(100),
+                    border: Border.all(
+                      // El borde azul se mantiene siempre visible para dar estructura
+                      color: AppColors.azulPrimario,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.arrow_upward_rounded,
+                    // Activo: Ícono blanco para contrastar | Inactivo: Ícono azul
+                    color: _dioLike ? Colors.white : AppColors.azulPrimario,
+                    size: 24,
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
-                  // El botón de compartir NO requiere login porque queremos viralidad (HU10.1)
-                  onPressed: () {},
+                  onPressed: _manejarCompartir, // <--- Conectado aquí
                   icon: const Icon(Icons.share, size: 18),
                   label: const Text('Compartir'),
                   style: OutlinedButton.styleFrom(
@@ -185,26 +390,76 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
             backgroundColor: AppColors.azulPrimario,
             iconTheme: const IconThemeData(color: Colors.white),
             flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                color: AppColors.azulPrimario,
-                child: const Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.add_a_photo_outlined,
-                        size: 60,
-                        color: Colors.white24,
+              background:
+                  widget.hecho.fotoUrl != null &&
+                      widget.hecho.fotoUrl!.isNotEmpty
+                  ? Image.network(
+                      widget.hecho.fotoUrl!,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      // 1. Efecto de carga mientras descarga la imagen
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          color: AppColors.azulPrimario,
+                          child: const Center(
+                            child: CircularProgressIndicator(
+                              color: Colors.white54,
+                            ),
+                          ),
+                        );
+                      },
+                      // 2. Protección anti-crash si la imagen se borra de Supabase
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: AppColors.azulPrimario,
+                          child: const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.broken_image_outlined,
+                                  size: 60,
+                                  color: Colors.white24,
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Error al cargar imagen',
+                                  style: TextStyle(
+                                    color: Colors.white54,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    )
+                  // 3. Fallback si el reporte no tiene URL guardada
+                  : Container(
+                      color: AppColors.azulPrimario,
+                      child: const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.add_a_photo_outlined,
+                              size: 60,
+                              color: Colors.white24,
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              'Foto ciudadana pendiente',
+                              style: TextStyle(
+                                color: Colors.white54,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Foto ciudadana pendiente',
-                        style: TextStyle(color: Colors.white54, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+                    ),
             ),
           ),
 
@@ -222,6 +477,7 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // TÍTULO Y ESTADO
+                    const SizedBox(height: 16),
                     Text(
                       estilos['titulo'],
                       style: TextStyle(
@@ -239,7 +495,7 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: widget.hecho.estado == 'activo'
+                            color: _estadoActual == 'activo'
                                 ? Colors.blue[100]
                                 : Colors.green[100],
                             borderRadius: BorderRadius.circular(100),
@@ -249,15 +505,15 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                               Icon(
                                 Icons.circle,
                                 size: 8,
-                                color: widget.hecho.estado == 'activo'
+                                color: _estadoActual == 'activo'
                                     ? Colors.blue[700]
                                     : Colors.green[700],
                               ),
                               const SizedBox(width: 6),
                               Text(
-                                widget.hecho.estado.toUpperCase(),
+                                _estadoActual.toUpperCase(),
                                 style: TextStyle(
-                                  color: widget.hecho.estado == 'activo'
+                                  color: _estadoActual == 'activo'
                                       ? Colors.blue[700]
                                       : Colors.green[700],
                                   fontWeight: FontWeight.bold,
@@ -280,85 +536,170 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
 
                     const SizedBox(height: 24),
 
-                    // TARJETA DEL USUARIO
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF4F7FB),
-                        borderRadius: BorderRadius.circular(100),
+                    // TARJETA DEL USUARIO (REDISEÑO)
+                    InkWell(
+                      onTap: _verPerfilAutor,
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.grey[200]!),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.02),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            // Avatar con borde de nivel
+                            Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: AppColors.azulPrimario.withOpacity(
+                                    0.5,
+                                  ),
+                                  width: 2,
+                                ),
+                              ),
+                              child: CircleAvatar(
+                                radius: 22,
+                                backgroundColor: Colors.grey[100],
+                                backgroundImage:
+                                    widget.hecho.avatarAutor != null &&
+                                        widget.hecho.avatarAutor!.isNotEmpty
+                                    ? NetworkImage(widget.hecho.avatarAutor!)
+                                    : null,
+                                child:
+                                    widget.hecho.avatarAutor == null ||
+                                        widget.hecho.avatarAutor!.isEmpty
+                                    ? const Icon(
+                                        Icons.person,
+                                        color: AppColors.azulPrimario,
+                                      )
+                                    : null,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        widget.hecho.nombreAutor ?? 'Ciudadano',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15,
+                                          color: Color(0xFF1D1E20),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      const Icon(
+                                        Icons.verified,
+                                        size: 14,
+                                        color: AppColors.azulPrimario,
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Nivel ${_calcularNivel(widget.hecho.reputacionAutor)} • ${widget.hecho.reputacionAutor ?? 0} pts',
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Botón de acción minimalista
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.azulPrimario.withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Text(
+                                'Ver perfil',
+                                style: TextStyle(
+                                  color: AppColors.azulPrimario,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      child: Row(
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // DESCRIPCIÓN COMPLETA (REDISEÑO)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.blueGrey.withOpacity(
+                          0.04,
+                        ), // Fondo muy sutil
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.blueGrey.withOpacity(0.08),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          CircleAvatar(
-                            radius: 20,
-                            backgroundColor: Colors.grey[300],
-                            backgroundImage:
-                                widget.hecho.avatarAutor != null &&
-                                    widget.hecho.avatarAutor!.isNotEmpty
-                                ? NetworkImage(widget.hecho.avatarAutor!)
-                                : null,
-                            child:
-                                widget.hecho.avatarAutor == null ||
-                                    widget.hecho.avatarAutor!.isEmpty
-                                ? const Icon(Icons.person, color: Colors.white)
-                                : null,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  widget.hecho.nombreAutor ??
-                                      'Ciudadano Anónimo',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.blueGrey[900],
-                                    fontSize: 14,
-                                  ),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.subject_rounded,
+                                size: 18,
+                                color: Colors.blueGrey[400],
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'DETALLES DEL REPORTE',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blueGrey[400],
+                                  letterSpacing: 1.0,
                                 ),
-                                Text(
-                                  'Reputación: ${widget.hecho.reputacionAutor ?? 0} pts • Nivel ${_calcularNivel(widget.hecho.reputacionAutor)}',
-                                  style: TextStyle(
-                                    color: Colors.blueGrey[500],
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.person_search_outlined,
-                              size: 18,
-                              color: AppColors.azulPrimario,
+                          const SizedBox(height: 12),
+                          Text(
+                            widget.hecho.descripcion ??
+                                'Sin descripción detallada.',
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: Colors.blueGrey[900],
+                              height:
+                                  1.6, // Mayor interlineado para mejor lectura
                             ),
                           ),
                         ],
                       ),
                     ),
 
-                    const SizedBox(height: 24),
-
-                    // DESCRIPCIÓN COMPLETA
-                    Text(
-                      widget.hecho.descripcion ?? 'Sin descripción detallada.',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.blueGrey[800],
-                        height: 1.5,
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
-                    const Divider(),
-                    const SizedBox(height: 16),
-
+                    const SizedBox(
+                      height: 32,
+                    ), // Espaciado antes de la validación (eliminamos el Divider)
                     // SECCIÓN: VALIDACIÓN COMUNITARIA
                     Text(
                       'VALIDACIÓN COMUNITARIA',
@@ -425,7 +766,9 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                                       ),
                                     ),
                                     Text(
-                                      '14 vecinos confirmaron esto hoy',
+                                      _conteoSiguePasando == 1
+                                          ? '1 vecino confirmó esto'
+                                          : '$_conteoSiguePasando vecinos confirmaron esto',
                                       style: TextStyle(
                                         color: Colors.blueGrey[500],
                                         fontSize: 12,
@@ -477,7 +820,9 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      _votoResuelto
+                                      _estadoActual == 'resuelto'
+                                          ? 'Problema solucionado'
+                                          : _votoResuelto
                                           ? 'Voto de resolución enviado'
                                           : 'Marcar como Resuelto',
                                       style: const TextStyle(
@@ -487,9 +832,9 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                                       ),
                                     ),
                                     Text(
-                                      _votoResuelto
-                                          ? 'Esperando confirmación comunitaria'
-                                          : '¿Se arregló desde tu última visita?',
+                                      _estadoActual == 'resuelto'
+                                          ? 'La comunidad verificó la solución'
+                                          : '$_conteoResuelto/3 votos comunitarios',
                                       style: const TextStyle(
                                         color: Colors.white70,
                                         fontSize: 12,

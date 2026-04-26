@@ -54,7 +54,15 @@ class AuthRepository {
         creadoEn: DateTime.now(), // Se sobreescribe en la BD
       );
 
-      await _supabase.from('usuarios').insert(nuevoUsuario.toJson());
+      // SOLUCIÓN AL CLON DE CUENTAS: Usamos upsert en lugar de insert
+      // Si el Trigger ya creó la fila "Vecino_...", el upsert la actualizará con el alias real.
+      await _supabase
+          .from('usuarios')
+          .upsert(
+            nuevoUsuario.toJson(),
+            onConflict:
+                'auth_id', // Le decimos que resuelva conflictos usando esta columna única
+          );
     }
   }
 
