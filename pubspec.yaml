@@ -38,6 +38,7 @@ dependencies:
   flutter_svg: ^2.2.4
   google_maps_flutter: ^2.5.0
   geolocator: ^10.1.0 # Para obtener la ubicación del ciudadano
+  image_picker: ^1.2.1
 
 dev_dependencies:
   flutter_test:

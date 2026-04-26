@@ -10,6 +10,8 @@ import 'nuevo_hecho_sheet.dart';
 import 'comunidad_feed_screen.dart';
 import 'hecho_detalle_screen.dart';
 import '../models/hecho_model.dart';
+import '../../auth/controllers/usuario_controller.dart';
+import '../../usuarios/screens/perfil_usuario_screen.dart';
 
 class MapaPrincipalScreen extends StatefulWidget {
   const MapaPrincipalScreen({super.key});
@@ -21,15 +23,14 @@ class MapaPrincipalScreen extends StatefulWidget {
 class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
   int _indiceTabActual = 0;
   final AuthController _authController = AuthController();
-
-  // --- EL ESTADO ELEVADO ---
-  // Ahora el cerebro vive en la clase principal para que todos puedan usarlo
   final HechosController _hechosController = HechosController();
+  final UsuarioController _usuarioController = UsuarioController();
 
   @override
   void dispose() {
     // Es crucial limpiar el controlador cuando la pantalla principal muera
     _hechosController.dispose();
+    _usuarioController.dispose();
     super.dispose();
   }
 
@@ -53,7 +54,10 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
   Widget get _vistaComunidad =>
       ComunidadFeedScreen(controlador: _hechosController);
   Widget get _vistaActividad => const _VistaActividadNotificaciones();
-  Widget get _vistaPerfil => const _VistaPerfilUsuario();
+  Widget get _vistaPerfil => PerfilUsuarioScreen(
+    authController: _authController,
+    usuarioController: _usuarioController,
+  );
 
   @override
   Widget build(BuildContext context) {
