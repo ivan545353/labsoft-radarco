@@ -33,34 +33,24 @@ class HechosRepository {
     }
   }
 
-  // --- DESCARGAR REPORTES POR ESTADO (ACTIVO O RESUELTO) ---
+  // --- DESCARGAR REPORTES POR ESTADO (Usando la Vista SQL) ---
   Future<List<HechoModel>> obtenerHechosPorEstado({
     String estado = 'activo',
   }) async {
     try {
+      // Ahora consultamos la VISTA en lugar de la tabla
       final response = await _supabase
-          .from('hechos')
-          .select('''
-            *,
-            usuarios:ciudadano_id (alias, avatar_url, reputacion)
-          ''')
-          .eq('estado', estado) // <--- Aquí inyectamos el filtro dinámico
+          .from('vista_hechos_comunidad')
+          .select() // Ya no necesitamos hacer el inner join aquí, la vista lo hace
+          .eq('estado', estado)
           .order('creado_en', ascending: false);
 
+      // El mapeo se vuelve directo
       return (response as List).map((json) {
-        final map = Map<String, dynamic>.from(json);
-
-        final autor = map['usuarios'];
-        map['nombre_autor'] = autor != null
-            ? autor['alias']
-            : 'Ciudadano Anónimo';
-        map['avatar_autor'] = autor != null ? autor['avatar_url'] : null;
-        map['reputacion_autor'] = autor != null ? autor['reputacion'] : 0;
-
-        return HechoModel.fromJson(map);
+        return HechoModel.fromJson(Map<String, dynamic>.from(json));
       }).toList();
     } catch (e) {
-      throw Exception('Error al obtener hechos ($estado): $e');
+      throw Exception('Error al obtener hechos de la vista ($estado): $e');
     }
   }
 
@@ -181,24 +171,16 @@ class HechosRepository {
 
   Future<HechoModel?> obtenerHechoPorId(String id) async {
     try {
+      // AHORA USAMOS LA VISTA SQL TAMBIÉN AQUÍ
       final response = await _supabase
-          .from('hechos')
-          .select('''
-            *,
-            usuarios:ciudadano_id (alias, avatar_url, reputacion)
-          ''')
+          .from('vista_hechos_comunidad')
+          .select()
           .eq('id', id)
           .single();
 
-      final map = Map<String, dynamic>.from(response);
-      final autor = map['usuarios'];
-      map['nombre_autor'] = autor != null
-          ? autor['alias']
-          : 'Ciudadano Anónimo';
-      map['avatar_autor'] = autor != null ? autor['avatar_url'] : null;
-      map['reputacion_autor'] = autor != null ? autor['reputacion'] : 0;
-
-      return HechoModel.fromJson(map);
+      // Como la vista ya trae nombre_autor, avatar_autor y los conteos,
+      // el mapeo manual ya no es necesario.
+      return HechoModel.fromJson(Map<String, dynamic>.from(response));
     } catch (e) {
       debugPrint('Error al obtener hecho individual: $e');
       return null;

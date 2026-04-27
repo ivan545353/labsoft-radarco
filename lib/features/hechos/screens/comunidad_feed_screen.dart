@@ -107,6 +107,9 @@ class ComunidadFeedScreen extends StatelessWidget {
 // ============================================================================
 // WIDGET: TARJETA DE REPORTE (Rediseño Stitch + Navegación)
 // ============================================================================
+// ============================================================================
+// WIDGET: TARJETA DE REPORTE (Rediseño Stitch + Datos Dinámicos)
+// ============================================================================
 class HechoCard extends StatelessWidget {
   final HechoModel hecho;
 
@@ -188,17 +191,20 @@ class HechoCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. CABECERA: Avatar, Nombre, Tiempo y Etiqueta
+            // 1. CABECERA: Avatar Dinámico, Nombre, Tiempo y Etiqueta
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 CircleAvatar(
                   radius: 22,
-                  backgroundColor: Colors.grey[200],
-                  child: const Icon(
-                    Icons.person,
-                    color: Colors.white,
-                  ), // Placeholder seguro Anti-Crash
+                  backgroundColor: Colors.grey[100],
+                  backgroundImage:
+                      hecho.avatarAutor != null && hecho.avatarAutor!.isNotEmpty
+                      ? NetworkImage(hecho.avatarAutor!)
+                      : null,
+                  child: hecho.avatarAutor == null || hecho.avatarAutor!.isEmpty
+                      ? Icon(Icons.person, color: Colors.blueGrey[300])
+                      : null,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -206,16 +212,18 @@ class HechoCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Vecino Caletense',
+                        hecho.nombreAutor ?? 'Ciudadano Anónimo', // Nombre real
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                           color: Colors.blueGrey[900],
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${_tiempoTranscurrido(hecho.creadoEn)} • Zona Centro',
+                        '${_tiempoTranscurrido(hecho.creadoEn)} • Nivel ${(hecho.reputacionAutor ?? 0) ~/ 50 + 1}', // Nivel real
                         style: TextStyle(
                           color: Colors.blueGrey[400],
                           fontSize: 12,
@@ -269,19 +277,30 @@ class HechoCard extends StatelessWidget {
 
             const SizedBox(height: 16),
 
-            // 3. IMAGEN (Placeholder Anti-Crash)
-            if (!esBurbuja) ...[
+            // 3. IMAGEN DINÁMICA (Con protección)
+            if (!esBurbuja &&
+                hecho.fotoUrl != null &&
+                hecho.fotoUrl!.isNotEmpty) ...[
               ClipRRect(
                 borderRadius: BorderRadius.circular(20),
-                child: Container(
+                child: Image.network(
+                  hecho.fotoUrl!,
                   height: 200,
                   width: double.infinity,
-                  color: Colors.grey[200],
-                  child: const Center(
-                    child: Icon(
-                      Icons.image_outlined,
-                      size: 50,
-                      color: Colors.black12,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      height: 200,
+                      color: Colors.grey[100],
+                      child: const Center(child: CircularProgressIndicator()),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    height: 200,
+                    color: Colors.grey[100],
+                    child: const Center(
+                      child: Icon(Icons.broken_image, color: Colors.grey),
                     ),
                   ),
                 ),
@@ -289,13 +308,17 @@ class HechoCard extends StatelessWidget {
               const SizedBox(height: 16),
             ],
 
-            // 4. BARRA DE INTERACCIONES
+            // 4. BARRA DE INTERACCIONES (Preparada para Reddit Style)
             Row(
               children: [
-                Icon(Icons.favorite, size: 20, color: Colors.blueGrey[300]),
+                Icon(
+                  Icons.arrow_upward_rounded,
+                  size: 20,
+                  color: Colors.blueGrey[300],
+                ),
                 const SizedBox(width: 6),
                 Text(
-                  '12',
+                  '${hecho.conteoUpvotes}', // <--- NÚMERO REAL DE UPVOTES
                   style: TextStyle(
                     color: Colors.blueGrey[500],
                     fontWeight: FontWeight.w600,
@@ -305,10 +328,14 @@ class HechoCard extends StatelessWidget {
 
                 const SizedBox(width: 20),
 
-                Icon(Icons.chat_bubble, size: 20, color: Colors.blueGrey[300]),
+                Icon(
+                  Icons.chat_bubble_outline_rounded,
+                  size: 18,
+                  color: Colors.blueGrey[300],
+                ),
                 const SizedBox(width: 6),
                 Text(
-                  '4',
+                  '${hecho.conteoComentarios}', // <--- LISTO PARA LOS COMENTARIOS
                   style: TextStyle(
                     color: Colors.blueGrey[500],
                     fontWeight: FontWeight.w600,
