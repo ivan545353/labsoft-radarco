@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../core/theme/app_colors.dart';
 import '../models/hecho_model.dart';
 import '../controllers/hechos_controller.dart';
 import 'hecho_detalle_screen.dart';

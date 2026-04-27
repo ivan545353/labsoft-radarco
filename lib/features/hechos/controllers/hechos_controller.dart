@@ -14,6 +14,9 @@ class HechosController extends ChangeNotifier {
   String? _mensajeError;
   String? get mensajeError => _mensajeError;
 
+  String _filtroEstadoActual = 'activo';
+  String get filtroEstadoActual => _filtroEstadoActual;
+
   List<HechoModel> _hechosActivos = [];
   List<HechoModel> get hechosActivos => _hechosActivos;
 
@@ -33,8 +36,13 @@ class HechosController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _hechosActivos = await _repository.obtenerHechosActivos();
-      // CAMBIO: Ahora la generación es asincrónica
+      // NUEVO: Disparamos la limpieza automática en la base de datos silenciosamente
+      await Supabase.instance.client.rpc('archivar_hechos_caducados');
+
+      // Luego descargamos los hechos (los caducados ya habrán desaparecido)
+      _hechosActivos = await _repository.obtenerHechosPorEstado(
+        estado: _filtroEstadoActual,
+      );
       await _generarMarcadoresPersonalizados();
     } catch (e) {
       _mensajeError = 'No se pudieron cargar los reportes: $e';
@@ -42,6 +50,15 @@ class HechosController extends ChangeNotifier {
       _estaCargando = false;
       notifyListeners();
     }
+  }
+
+  // NUEVO: Método para alternar entre Activos e Historial
+  Future<void> cambiarFiltro(String nuevoEstado) async {
+    if (_filtroEstadoActual == nuevoEstado)
+      return; // Evita recargas innecesarias
+
+    _filtroEstadoActual = nuevoEstado;
+    await cargarHechos(); // Vuelve a descargar y a pintar el mapa
   }
 
   // NUEVA LÓGICA DE UX: Marcadores con íconos de Stitch
@@ -52,20 +69,25 @@ class HechosController extends ChangeNotifier {
       IconData iconMarker;
       Color colorMarker;
 
-      // Mapeo preciso según el Stitch UI
-      if (hecho.tipoHecho == 'problema') {
-        iconMarker = Icons.warning_rounded; // Ícono de Problem
-        colorMarker = Colors.red;
-      } else if (hecho.tipoHecho == 'alerta') {
-        iconMarker = Icons.error_outline_rounded; // Ícono de Alert
-        colorMarker = Colors.orange;
-      } else if (hecho.tipoHecho == 'positivo') {
-        iconMarker = Icons.thumb_up_alt_rounded; // Ícono de Positive
-        colorMarker = Colors.green;
+      if (hecho.estado == 'resuelto') {
+        iconMarker = Icons.verified_rounded;
+        colorMarker = Colors.blueGrey; // Color neutro para no saturar el mapa
       } else {
-        // comunitario/defecto
-        iconMarker = Icons.group_work_rounded;
-        colorMarker = Colors.blue;
+        // Mapeo normal de iconos
+        if (hecho.tipoHecho == 'problema') {
+          iconMarker = Icons.warning_rounded; // Ícono de Problem
+          colorMarker = Colors.red;
+        } else if (hecho.tipoHecho == 'alerta') {
+          iconMarker = Icons.error_outline_rounded; // Ícono de Alert
+          colorMarker = Colors.orange;
+        } else if (hecho.tipoHecho == 'positivo') {
+          iconMarker = Icons.thumb_up_alt_rounded; // Ícono de Positive
+          colorMarker = Colors.green;
+        } else {
+          // comunitario/defecto
+          iconMarker = Icons.group_work_rounded;
+          colorMarker = Colors.blue;
+        }
       }
 
       // CAMBIO UX CLAVE: Descargamos el ícono personalizado asincrónicamente

@@ -23,6 +23,7 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
   bool _cargandoEstado = true;
   int _conteoSiguePasando = 0;
   int _conteoResuelto = 0;
+  int _conteoUpvotes = 0;
   late String _estadoActual;
 
   final HechosController _hechosController = HechosController();
@@ -88,6 +89,7 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
       setState(() {
         _conteoSiguePasando = conteos['sigue_pasando'] ?? 0;
         _conteoResuelto = conteos['ya_se_resolvio'] ?? 0;
+        _conteoUpvotes = conteos['upvote'] ?? 0; // <--- NUEVO
       });
     }
 
@@ -129,7 +131,14 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
     if (_requiereLogin() || _cargandoEstado) return;
 
     final estadoAnterior = _dioLike;
-    setState(() => _dioLike = !_dioLike); // Actualización optimista
+    setState(() {
+      _dioLike = !_dioLike;
+      if (_dioLike) {
+        _conteoUpvotes++;
+      } else {
+        _conteoUpvotes--;
+      }
+    });
 
     bool exito;
     if (estadoAnterior) {
@@ -309,33 +318,45 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
           padding: const EdgeInsets.all(16.0),
           child: Row(
             children: [
-              // Botón de Prioridad (Upvote) con estilo "Solid Selection"
               InkWell(
                 onTap: _manejarLike,
                 borderRadius: BorderRadius.circular(100),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
+                    horizontal: 16,
                     vertical: 12,
                   ),
                   decoration: BoxDecoration(
-                    // Activo: Fondo azul sólido | Inactivo: Fondo transparente
-                    color: _dioLike
-                        ? AppColors.azulPrimario
-                        : Colors.transparent,
+                    // Activo: Fondo azul sólido | Inactivo: Fondo gris claro suave
+                    color: _dioLike ? AppColors.azulPrimario : Colors.grey[100],
                     borderRadius: BorderRadius.circular(100),
                     border: Border.all(
-                      // El borde azul se mantiene siempre visible para dar estructura
-                      color: AppColors.azulPrimario,
+                      color: _dioLike
+                          ? AppColors.azulPrimario
+                          : Colors.transparent,
                       width: 1.5,
                     ),
                   ),
-                  child: Icon(
-                    Icons.arrow_upward_rounded,
-                    // Activo: Ícono blanco para contrastar | Inactivo: Ícono azul
-                    color: _dioLike ? Colors.white : AppColors.azulPrimario,
-                    size: 24,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        // Flecha directa hacia arriba (estilo foro)
+                        Icons.arrow_upward_rounded,
+                        color: _dioLike ? Colors.white : Colors.blueGrey[600],
+                        size: 20,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '$_conteoUpvotes',
+                        style: TextStyle(
+                          color: _dioLike ? Colors.white : Colors.blueGrey[800],
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

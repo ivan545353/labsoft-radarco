@@ -233,18 +233,16 @@ class _VistaMapaInteractiva extends StatefulWidget {
 
 class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
   static const CameraPosition _puntoInicial = CameraPosition(
-    target: LatLng(-46.4389, -67.5191),
+    target: LatLng(-46.4389, -67.5191), // Caleta Olivia
     zoom: 14.0,
   );
 
-  // NUEVO: Estado para saber qué pin está seleccionado
   HechoModel? _hechoSeleccionado;
 
   @override
   void initState() {
     super.initState();
 
-    // Ahora el callback NO navega de golpe, sino que guarda el hecho y levanta la tarjeta
     widget.controlador.setAbrirDetalleCallback((hechoTocado) {
       setState(() {
         _hechoSeleccionado = hechoTocado;
@@ -272,7 +270,6 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
               myLocationButtonEnabled: false,
               zoomControlsEnabled: false,
               markers: widget.controlador.marcadores,
-              // NUEVO: Si tocan en un lugar vacío del mapa, escondemos la tarjeta
               onTap: (LatLng posicion) {
                 if (_hechoSeleccionado != null) {
                   setState(() => _hechoSeleccionado = null);
@@ -280,10 +277,65 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
               },
             ),
 
+            // --- NUEVO: FILTRO FLOTANTE SUPERIOR ---
+            Positioned(
+              top: 130, // Justo debajo del AppBar transparente
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Botón "Activos"
+                      _buildFiltroPill(
+                        titulo: 'Activos',
+                        icono: Icons.bolt_rounded,
+                        esActivo:
+                            widget.controlador.filtroEstadoActual == 'activo',
+                        colorPrimario: AppColors.azulPrimario,
+                        onTap: () {
+                          setState(
+                            () => _hechoSeleccionado = null,
+                          ); // Oculta tarjeta si estaba abierta
+                          widget.controlador.cambiarFiltro('activo');
+                        },
+                      ),
+                      // Botón "Resueltos"
+                      _buildFiltroPill(
+                        titulo: 'Resueltos', // Cambio semántico
+                        icono:
+                            Icons.emoji_events_rounded, // Ícono de logro/trofeo
+                        esActivo:
+                            widget.controlador.filtroEstadoActual == 'resuelto',
+                        colorPrimario: Colors.green[600]!,
+                        onTap: () {
+                          setState(() => _hechoSeleccionado = null);
+                          widget.controlador.cambiarFiltro('resuelto');
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
             // Indicador de carga
             if (widget.controlador.estaCargando)
               const Positioned(
-                top: 100,
+                top: 170, // Lo bajamos un poco para no tapar el filtro
                 left: 0,
                 right: 0,
                 child: Center(
@@ -297,13 +349,11 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
                 ),
               ),
 
-            // NUEVO: LA MINI-TARJETA ANIMADA (Estilo Uber/Airbnb)
+            // LA MINI-TARJETA ANIMADA
             AnimatedPositioned(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOutCubic,
-              bottom: _hechoSeleccionado != null
-                  ? 55
-                  : -150, // Se desliza desde abajo
+              bottom: _hechoSeleccionado != null ? 55 : -150,
               left: 20,
               right: 90,
               child: _hechoSeleccionado == null
@@ -316,19 +366,64 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
     );
   }
 
+  // NUEVO: Widget interno para construir las "píldoras" del filtro
+  Widget _buildFiltroPill({
+    required String titulo,
+    required IconData icono,
+    required bool esActivo,
+    required Color colorPrimario,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: esActivo ? colorPrimario.withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(25),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icono,
+              size: 16,
+              color: esActivo ? colorPrimario : Colors.grey[500],
+            ),
+            const SizedBox(width: 6),
+            Text(
+              titulo,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+                color: esActivo ? colorPrimario : Colors.grey[500],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // Diseño de la Mini-Tarjeta
   Widget _buildTarjetaPrevisualizacion(BuildContext context, HechoModel hecho) {
-    Color colorCategoria = hecho.tipoHecho == 'problema'
-        ? Colors.red
-        : hecho.tipoHecho == 'alerta'
-        ? Colors.orange
-        : hecho.tipoHecho == 'positivo'
-        ? Colors.green
-        : Colors.blue;
+    Color colorCategoria;
+
+    // Si estamos viendo el historial, atenuamos los colores
+    if (hecho.estado == 'resuelto') {
+      colorCategoria = Colors.blueGrey;
+    } else {
+      colorCategoria = hecho.tipoHecho == 'problema'
+          ? Colors.red
+          : hecho.tipoHecho == 'alerta'
+          ? Colors.orange
+          : hecho.tipoHecho == 'positivo'
+          ? Colors.green
+          : Colors.blue;
+    }
 
     return GestureDetector(
       onTap: () {
-        // Al tocar esta tarjeta clara e intuitiva, AHORA SÍ vamos al detalle
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -351,23 +446,26 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
         ),
         child: Row(
           children: [
-            // Círculo de color dinámico según la categoría
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: colorCategoria.withOpacity(0.15),
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.location_on, color: colorCategoria),
+              child: Icon(
+                hecho.estado == 'resuelto' ? Icons.verified : Icons.location_on,
+                color: colorCategoria,
+              ),
             ),
             const SizedBox(width: 16),
-            // Textos
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    hecho.tipoHecho.toUpperCase(),
+                    hecho.estado == 'resuelto'
+                        ? 'RESUELTO • ${hecho.tipoHecho.toUpperCase()}'
+                        : hecho.tipoHecho.toUpperCase(),
                     style: TextStyle(
                       fontWeight: FontWeight.w800,
                       fontSize: 10,
@@ -384,13 +482,11 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
                       color: Colors.blueGrey[900],
                     ),
                     maxLines: 1,
-                    overflow: TextOverflow
-                        .ellipsis, // Pone "..." si el texto es muy largo
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ),
-            // Indicador visual de "tocar aquí"
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(

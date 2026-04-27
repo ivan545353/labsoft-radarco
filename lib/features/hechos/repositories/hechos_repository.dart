@@ -33,30 +33,24 @@ class HechosRepository {
     }
   }
 
-  // --- 2. DESCARGAR REPORTES PARA EL MAPA ---
-  Future<List<HechoModel>> obtenerHechosActivos() async {
+  // --- DESCARGAR REPORTES POR ESTADO (ACTIVO O RESUELTO) ---
+  Future<List<HechoModel>> obtenerHechosPorEstado({
+    String estado = 'activo',
+  }) async {
     try {
-      // Realizamos un JOIN con la tabla usuarios usando la relación de la FK
       final response = await _supabase
           .from('hechos')
           .select('''
-          *,
-          usuarios:ciudadano_id (
-            alias,
-            avatar_url,
-            reputacion
-          )
-        ''')
-          .eq('estado', 'activo')
+            *,
+            usuarios:ciudadano_id (alias, avatar_url, reputacion)
+          ''')
+          .eq('estado', estado) // <--- Aquí inyectamos el filtro dinámico
           .order('creado_en', ascending: false);
 
       return (response as List).map((json) {
         final map = Map<String, dynamic>.from(json);
 
-        // Extraemos los datos del autor que vienen anidados por el JOIN
         final autor = map['usuarios'];
-
-        // Mapeamos los datos reales al modelo para que la UI los use
         map['nombre_autor'] = autor != null
             ? autor['alias']
             : 'Ciudadano Anónimo';
@@ -66,7 +60,7 @@ class HechosRepository {
         return HechoModel.fromJson(map);
       }).toList();
     } catch (e) {
-      throw Exception('Error al obtener hechos con autores: $e');
+      throw Exception('Error al obtener hechos ($estado): $e');
     }
   }
 
