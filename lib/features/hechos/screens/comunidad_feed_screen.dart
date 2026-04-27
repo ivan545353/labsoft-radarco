@@ -27,24 +27,15 @@ class ComunidadFeedScreen extends StatelessWidget {
               // CABECERA DE LA PANTALLA (Stitch Style)
               SliverPadding(
                 padding: const EdgeInsets.only(
-                  top: 100,
+                  top: 130,
                   left: 24,
                   right: 24,
                   bottom: 10,
                 ),
                 sliver: SliverToBoxAdapter(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Text(
-                        'TU BARRIO',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.blueGrey[700],
-                          letterSpacing: 1.2,
-                        ),
-                      ),
                       const SizedBox(height: 4),
                       Text(
                         'Feed de la Comunidad',

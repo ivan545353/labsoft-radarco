@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/hecho_model.dart';
 import '../repositories/hechos_repository.dart';
 import '../../../core/utils/map_marker_utils.dart';
+import '../models/comentario_model.dart';
 
 class HechosController extends ChangeNotifier {
   final HechosRepository _repository = HechosRepository();
@@ -223,6 +224,122 @@ class HechosController extends ChangeNotifier {
       _mensajeError = 'Error al refrescar el reporte: $e';
       notifyListeners();
       return null;
+    }
+  }
+
+  Future<List<ComentarioModel>> obtenerComentarios(String hechoId) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    String? ciudadanoIdActual;
+
+    // Si el usuario está logueado, traducimos su auth_id a su ciudadano_id público
+    if (user != null) {
+      try {
+        final userData = await Supabase.instance.client
+            .from('usuarios')
+            .select('id')
+            .eq('auth_id', user.id)
+            .single();
+        ciudadanoIdActual = userData['id'];
+      } catch (e) {
+        debugPrint('Usuario anónimo leyendo comentarios');
+      }
+    }
+
+    return await _repository.obtenerComentarios(hechoId, ciudadanoIdActual);
+  }
+
+  Future<bool> publicarComentario(
+    String hechoId,
+    String texto, {
+    String? respuestaAId,
+  }) async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      final userData = await Supabase.instance.client
+          .from('usuarios')
+          .select('id')
+          .eq('auth_id', user!.id)
+          .single();
+
+      await Supabase.instance.client.from('comentarios').insert({
+        'hecho_id': hechoId,
+        'ciudadano_id': userData['id'],
+        'contenido': texto,
+        'respuesta_a_id': respuestaAId, // <--- INYECTADO AQUÍ
+      });
+      return true;
+    } catch (e) {
+      debugPrint('Error al comentar: $e');
+      return false;
+    }
+  }
+
+  // Gestión de Likes en Comentarios
+  Future<bool> alternarLikeComentario(String comentarioId, bool darLike) async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return false;
+
+      final userData = await Supabase.instance.client
+          .from('usuarios')
+          .select('id')
+          .eq('auth_id', user.id)
+          .single();
+      final ciudadanoId = userData['id'];
+
+      if (darLike) {
+        await Supabase.instance.client.from('comentario_likes').insert({
+          'comentario_id': comentarioId,
+          'ciudadano_id': ciudadanoId,
+        });
+      } else {
+        await Supabase.instance.client.from('comentario_likes').delete().match({
+          'comentario_id': comentarioId,
+          'ciudadano_id': ciudadanoId,
+        });
+      }
+      return true;
+    } catch (e) {
+      debugPrint('Error al procesar el like: $e');
+      return false;
+    }
+  }
+
+  // Gestión de Denuncias
+  Future<bool> reportarComentario(String comentarioId, String motivo) async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return false;
+
+      final userData = await Supabase.instance.client
+          .from('usuarios')
+          .select('id')
+          .eq('auth_id', user.id)
+          .single();
+
+      await Supabase.instance.client.from('reportes_moderacion').insert({
+        'reportado_por_id': userData['id'],
+        'comentario_id': comentarioId,
+        'motivo': motivo,
+      });
+      return true;
+    } catch (e) {
+      debugPrint('Error al reportar comentario: $e');
+      return false;
+    }
+  }
+
+  // --- ELIMINAR COMENTARIO ---
+  Future<bool> eliminarComentario(String comentarioId) async {
+    try {
+      await Supabase.instance.client
+          .from('comentarios')
+          .delete()
+          .eq('id', comentarioId);
+      return true;
+    } catch (e) {
+      debugPrint('Error al eliminar comentario: $e');
+      return false;
     }
   }
 }

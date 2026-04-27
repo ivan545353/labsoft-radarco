@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/hecho_model.dart';
+import '../models/comentario_model.dart';
 
 class HechosRepository {
   // Instanciamos la conexión a Supabase
@@ -185,5 +186,39 @@ class HechosRepository {
       debugPrint('Error al obtener hecho individual: $e');
       return null;
     }
+  }
+
+  Future<List<ComentarioModel>> obtenerComentarios(
+    String hechoId,
+    String? ciudadanoIdActual,
+  ) async {
+    try {
+      final response = await _supabase
+          .from('comentarios')
+          // Añadimos comentario_likes(ciudadano_id) al Select para traer la relación
+          .select(
+            '*, usuarios:ciudadano_id(alias, avatar_url), comentario_likes(ciudadano_id)',
+          )
+          .eq('hecho_id', hechoId)
+          .order('creado_en', ascending: true);
+
+      return (response as List)
+          .map((json) => ComentarioModel.fromJson(json, ciudadanoIdActual))
+          .toList();
+    } catch (e) {
+      throw Exception('Error al obtener comentarios: $e');
+    }
+  }
+
+  Future<void> enviarComentario(
+    String hechoId,
+    String usuarioId,
+    String texto,
+  ) async {
+    await _supabase.from('comentarios').insert({
+      'hecho_id': hechoId,
+      'ciudadano_id': usuarioId,
+      'contenido': texto,
+    });
   }
 }

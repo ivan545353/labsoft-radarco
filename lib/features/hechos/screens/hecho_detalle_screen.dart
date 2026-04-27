@@ -5,6 +5,7 @@ import '../models/hecho_model.dart';
 import '../../auth/screens/login_screen.dart';
 import '../controllers/hechos_controller.dart';
 import 'package:share_plus/share_plus.dart';
+import 'comentarios_sheet.dart';
 
 class HechoDetalleScreen extends StatefulWidget {
   final HechoModel hecho;
@@ -40,10 +41,12 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
     if (diferencia.inDays > 7) {
       return '${fecha.day}/${fecha.month}/${fecha.year}';
     }
-    if (diferencia.inDays > 0)
+    if (diferencia.inDays > 0) {
       return 'Hace ${diferencia.inDays} ${diferencia.inDays == 1 ? 'día' : 'días'}';
-    if (diferencia.inHours > 0)
+    }
+    if (diferencia.inHours > 0) {
       return 'Hace ${diferencia.inHours} ${diferencia.inHours == 1 ? 'hora' : 'horas'}';
+    }
     if (diferencia.inMinutes > 0) return 'Hace ${diferencia.inMinutes} min';
     return 'Reportado justo ahora';
   }
@@ -89,7 +92,7 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
       setState(() {
         _conteoSiguePasando = conteos['sigue_pasando'] ?? 0;
         _conteoResuelto = conteos['ya_se_resolvio'] ?? 0;
-        _conteoUpvotes = conteos['upvote'] ?? 0; // <--- NUEVO
+        _conteoUpvotes = conteos['upvote'] ?? 0;
       });
     }
 
@@ -148,7 +151,7 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
         'upvote',
       );
 
-      // NUEVO: Avisamos al usuario que perdió los puntos
+      // Avisamos al usuario que perdió los puntos
       if (mounted && exito) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -203,8 +206,9 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
   // --- LÓGICA PERMANENTE (VALIDACIONES) ---
   Future<void> _manejarVotoSiguePasando() async {
     // Bloqueado si ya votó o si el caso ya está resuelto
-    if (_requiereLogin() || _cargandoEstado || _estadoActual == 'resuelto')
+    if (_requiereLogin() || _cargandoEstado || _estadoActual == 'resuelto') {
       return;
+    }
     if (_votoSiguePasando || _votoResuelto) return;
 
     // UI Optimista: Registra el voto y sube el contador instantáneamente
@@ -237,8 +241,9 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
   }
 
   Future<void> _manejarVotoResuelto() async {
-    if (_requiereLogin() || _cargandoEstado || _estadoActual == 'resuelto')
+    if (_requiereLogin() || _cargandoEstado || _estadoActual == 'resuelto') {
       return;
+    }
     if (_votoResuelto || _votoSiguePasando) return;
 
     setState(() {
@@ -277,19 +282,9 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
   void _verPerfilAutor() {
     if (widget.hecho.ciudadanoId == null) return;
 
-    // Dejamos el Navigator listo. Por ahora puedes crear un archivo temporal
-    // o simplemente imprimir en consola para verificar que el ID llega bien.
     debugPrint(
       'Navegando al perfil del ciudadano: ${widget.hecho.ciudadanoId}',
     );
-
-    /* Navigator.push(
-      context, 
-      MaterialPageRoute(
-        builder: (context) => PerfilUsuarioScreen(idUsuario: widget.hecho.ciudadanoId!)
-      )
-    );
-    */
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -301,9 +296,20 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
     );
   }
 
+  // --- LÓGICA AÑADIDA: ABRIR PANEL DE COMENTARIOS ---
   void _manejarComentario() {
-    if (_requiereLogin()) return; // Intercepción de seguridad
-    // TODO: Abrir panel de comentarios
+    if (_requiereLogin()) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ComentariosSheet(
+        hechoId: widget.hecho.id,
+        autorHechoId: widget.hecho.ciudadanoId, // <--- ESTO ES LO NUEVO
+        controller: _hechosController,
+      ),
+    );
   }
 
   @override
@@ -328,7 +334,6 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                     vertical: 12,
                   ),
                   decoration: BoxDecoration(
-                    // Activo: Fondo azul sólido | Inactivo: Fondo gris claro suave
                     color: _dioLike ? AppColors.azulPrimario : Colors.grey[100],
                     borderRadius: BorderRadius.circular(100),
                     border: Border.all(
@@ -342,7 +347,6 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        // Flecha directa hacia arriba (estilo foro)
                         Icons.arrow_upward_rounded,
                         color: _dioLike ? Colors.white : Colors.blueGrey[600],
                         size: 20,
@@ -363,7 +367,7 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: _manejarCompartir, // <--- Conectado aquí
+                  onPressed: _manejarCompartir,
                   icon: const Icon(Icons.share, size: 18),
                   label: const Text('Compartir'),
                   style: OutlinedButton.styleFrom(
@@ -379,7 +383,7 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: _manejarComentario, // Protegido por login
+                  onPressed: _manejarComentario, // <--- Conectado aquí
                   icon: const Icon(
                     Icons.add_comment,
                     size: 18,
