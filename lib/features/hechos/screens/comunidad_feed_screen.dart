@@ -17,8 +17,13 @@ class ComunidadFeedScreen extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final hechosOrdenados = List<HechoModel>.from(controlador.hechosActivos)
-          ..sort((a, b) => b.creadoEn.compareTo(a.creadoEn));
+        // INTERCEPTOR VISUAL: Filtramos los hechos para excluir los 'positivos' del MVP
+        // y luego los ordenamos de forma descendente por fecha.
+        final hechosOrdenados =
+            controlador.hechosActivos
+                .where((hecho) => hecho.tipoHecho != 'positivo')
+                .toList()
+              ..sort((a, b) => b.creadoEn.compareTo(a.creadoEn));
 
         return Container(
           color: const Color(0xFFF4F7FB), // Fondo sutil azulado del diseño
@@ -81,8 +86,11 @@ class ComunidadFeedScreen extends StatelessWidget {
                   ),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
-                      (context, index) =>
-                          HechoCard(hecho: hechosOrdenados[index]),
+                      (context, index) => HechoCard(
+                        hecho: hechosOrdenados[index],
+                        controlador:
+                            controlador, // <--- PASAMOS EL CONTROLADOR A LA TARJETA
+                      ),
                       childCount: hechosOrdenados.length,
                     ),
                   ),
@@ -96,15 +104,17 @@ class ComunidadFeedScreen extends StatelessWidget {
 }
 
 // ============================================================================
-// WIDGET: TARJETA DE REPORTE (Rediseño Stitch + Navegación)
-// ============================================================================
-// ============================================================================
-// WIDGET: TARJETA DE REPORTE (Rediseño Stitch + Datos Dinámicos)
+// WIDGET: TARJETA DE REPORTE con Píldora de Vida Útil (TTL)
 // ============================================================================
 class HechoCard extends StatelessWidget {
   final HechoModel hecho;
+  final HechosController controlador; // <--- AÑADIDO PARA LA HERENCIA
 
-  const HechoCard({super.key, required this.hecho});
+  const HechoCard({
+    super.key,
+    required this.hecho,
+    required this.controlador, // <--- REQUERIDO EN EL CONSTRUCTOR
+  });
 
   String _tiempoTranscurrido(DateTime fecha) {
     final diferencia = DateTime.now().difference(fecha);
@@ -152,6 +162,44 @@ class HechoCard extends StatelessWidget {
     );
   }
 
+  // Indicador visual de la Vida Dinámica Restante
+  Widget _buildTTLPill() {
+    final horasRestantes = hecho.caducaEn.difference(DateTime.now()).inHours;
+    final esUrgente = horasRestantes <= 24 && horasRestantes >= 0;
+    final Color colorBase = esUrgente
+        ? const Color(0xFFE65100)
+        : const Color(0xFF546E7A); // Naranja cálido vs Azul grisáceo
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: colorBase.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(100),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            esUrgente
+                ? Icons.local_fire_department_rounded
+                : Icons.hourglass_bottom_rounded,
+            size: 14,
+            color: colorBase,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            hecho.tiempoRestanteVida,
+            style: TextStyle(
+              color: colorBase,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final esBurbuja = hecho.tipoHecho == 'comunitario';
@@ -161,7 +209,10 @@ class HechoCard extends StatelessWidget {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => HechoDetalleScreen(hecho: hecho),
+            builder: (context) => HechoDetalleScreen(
+              hecho: hecho,
+              controller: controlador, // <--- HERENCIA PERFECTA AL DETALLE
+            ),
           ),
         );
       },
@@ -299,7 +350,7 @@ class HechoCard extends StatelessWidget {
               const SizedBox(height: 16),
             ],
 
-            // 4. BARRA DE INTERACCIONES (Preparada para Reddit Style)
+            // 4. BARRA DE INTERACCIONES BALANCEADA
             Row(
               children: [
                 Icon(
@@ -309,7 +360,7 @@ class HechoCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  '${hecho.conteoUpvotes}', // <--- NÚMERO REAL DE UPVOTES
+                  '${hecho.conteoUpvotes}',
                   style: TextStyle(
                     color: Colors.blueGrey[500],
                     fontWeight: FontWeight.w600,
@@ -326,13 +377,17 @@ class HechoCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  '${hecho.conteoComentarios}', // <--- LISTO PARA LOS COMENTARIOS
+                  '${hecho.conteoComentarios}',
                   style: TextStyle(
                     color: Colors.blueGrey[500],
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
                   ),
                 ),
+
+                const Spacer(), // Empuja la píldora a la derecha
+                // Píldora de Tiempo Restante Dinámico
+                if (hecho.estado != 'resuelto') _buildTTLPill(),
               ],
             ),
           ],

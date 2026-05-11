@@ -65,8 +65,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
   // Método para abrir la cámara o galería
   Future<void> _seleccionarImagen() async {
     final XFile? imagenEscogida = await _picker.pickImage(
-      source: ImageSource
-          .camera, // Cambia a ImageSource.gallery si prefieres probar fotos guardadas
+      source: ImageSource.camera,
       imageQuality:
           70, // Comprimimos al 70% para ahorrar datos y no saturar la memoria
       maxWidth: 1024,
@@ -75,32 +74,27 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
     if (imagenEscogida != null && mounted) {
       setState(() {
         _imagenSeleccionada = File(imagenEscogida.path);
-        // Si había error visual de falta de foto, lo limpiamos
       });
     }
   }
 
-  // NUEVO: Ahora recibe el ID real para organizar la foto en la carpeta correcta del Storage
+  // Subida de imagen al Storage organizada por carpetas
   Future<String?> _subirImagenASupabase(
     File archivoImagen,
     String ciudadanoIdReal,
   ) async {
     try {
       final supabase = Supabase.instance.client;
-      // Creamos un nombre único basado en el tiempo para no sobreescribir fotos
       final extension = archivoImagen.path.split('.').last;
       final nombreArchivo =
           '${DateTime.now().millisecondsSinceEpoch}.$extension';
 
-      // Organizamos por carpetas usando el ID público del usuario
       final rutaArchivo = '$ciudadanoIdReal/$nombreArchivo';
 
-      // Subimos al bucket 'fotos_hechos'
       await supabase.storage
           .from('fotos_hechos')
           .upload(rutaArchivo, archivoImagen);
 
-      // Obtenemos la URL pública
       final urlPublica = supabase.storage
           .from('fotos_hechos')
           .getPublicUrl(rutaArchivo);
@@ -186,13 +180,14 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
       // 6. Crear el modelo inyectando el ID PÚBLICO
       final nuevoHecho = HechoModel(
         id: '',
-        ciudadanoId: ciudadanoIdReal, // <--- Aquí usamos el dato correcto
+        ciudadanoId: ciudadanoIdReal,
         tipoHecho: _tipoSeleccionado,
         latitud: _posicionActual!.latitude,
         longitud: _posicionActual!.longitude,
         fotoUrl: urlFotoReal,
         estado: 'activo',
         creadoEn: DateTime.now(),
+        caducaEn: DateTime.now().add(const Duration(days: 3)),
         descripcion: textoDescripcion,
       );
 
@@ -206,7 +201,6 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            // Agregamos el detalle de los puntos ganados para fomentar la participación
             content: Text('¡Reporte publicado con éxito! (+15 pts)'),
             backgroundColor: AppColors.exito,
           ),
@@ -327,7 +321,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
               ),
               const SizedBox(height: 24),
 
-              // CATEGORÍAS
+              // CATEGORÍAS (Excluida la opción 'Positivo' para el MVP)
               Text(
                 'CATEGORÍA',
                 style: TextStyle(
@@ -357,15 +351,6 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
                       color: AppColors.alerta,
                       isSelected: _tipoSeleccionado == 'alerta',
                       onTap: () => setState(() => _tipoSeleccionado = 'alerta'),
-                    ),
-                    const SizedBox(width: 8),
-                    _CategoriaChip(
-                      label: 'Positivo',
-                      icon: Icons.thumb_up_alt_outlined,
-                      color: AppColors.exito,
-                      isSelected: _tipoSeleccionado == 'positivo',
-                      onTap: () =>
-                          setState(() => _tipoSeleccionado = 'positivo'),
                     ),
                   ],
                 ),

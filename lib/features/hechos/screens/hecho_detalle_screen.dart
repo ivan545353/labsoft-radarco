@@ -9,25 +9,32 @@ import 'comentarios_sheet.dart';
 
 class HechoDetalleScreen extends StatefulWidget {
   final HechoModel hecho;
+  final HechosController controller; // <--- NUEVO
 
-  const HechoDetalleScreen({super.key, required this.hecho});
+  const HechoDetalleScreen({
+    super.key,
+    required this.hecho,
+    required this.controller,
+  }); // <--- ACTUALIZADO
 
   @override
   State<HechoDetalleScreen> createState() => _HechoDetalleScreenState();
 }
 
 class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
-  // VARIABLES DE ESTADO PARA LAS INTERACCIONES
+  // VARIABLES DE ESTADO PARA LAS INTERACCIONES Y PROPIEDAD
   bool _dioLike = false;
   bool _votoSiguePasando = false;
   bool _votoResuelto = false;
   bool _cargandoEstado = true;
+
+  // NUEVO: Bandera para saber si el usuario actual es el OP (Original Poster)
+  bool _esMio = false;
+
   int _conteoSiguePasando = 0;
   int _conteoResuelto = 0;
   int _conteoUpvotes = 0;
   late String _estadoActual;
-
-  final HechosController _hechosController = HechosController();
 
   @override
   void initState() {
@@ -57,8 +64,6 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
         return {'color': Colors.red, 'titulo': 'Problema Reportado'};
       case 'alerta':
         return {'color': Colors.orange, 'titulo': 'Alerta Comunitaria'};
-      case 'positivo':
-        return {'color': Colors.green, 'titulo': 'Hecho Positivo'};
       default:
         return {'color': Colors.blue, 'titulo': 'Reporte Comunitario'};
     }
@@ -69,22 +74,21 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
     return (reputacion / 50).floor() + 1;
   }
 
-  // --- RECUPERAR MEMORIA DE LA BASE DE DATOS ---
+  // --- RECUPERAR MEMORIA Y VALIDAR ROL (OP vs COMUNIDAD) ---
   Future<void> _sincronizarEstadoPrevio() async {
-    // 1. REFRESCAR DATOS: Traemos la versión más reciente de este reporte desde la BD
-    final hechoActualizado = await _hechosController.obtenerHechoPorId(
+    // 1. REFRESCAR DATOS
+    final hechoActualizado = await widget.controller.obtenerHechoPorId(
       widget.hecho.id,
     );
 
     if (hechoActualizado != null && mounted) {
       setState(() {
-        _estadoActual = hechoActualizado
-            .estado; // Ahora sí dirá "resuelto" si el trigger actuó
+        _estadoActual = hechoActualizado.estado;
       });
     }
 
-    // 2. CONTEO DE VOTOS: Cargamos el 1/3, 2/3 o 3/3 real
-    final conteos = await _hechosController.obtenerConteoInteracciones(
+    // 2. CONTEO DE VOTOS
+    final conteos = await widget.controller.obtenerConteoInteracciones(
       widget.hecho.id,
     );
 
@@ -96,24 +100,42 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
       });
     }
 
-    // 3. MEMORIA DEL USUARIO: Verificamos si este usuario ya votó para bloquear el botón
+    // 3. MEMORIA DEL USUARIO Y PROPIEDAD
     final sesionActual = Supabase.instance.client.auth.currentUser;
     if (sesionActual == null) {
       if (mounted) setState(() => _cargandoEstado = false);
       return;
     }
 
-    final interacciones = await _hechosController.cargarMisInteracciones(
-      widget.hecho.id,
-    );
+    try {
+      // Traducimos el ID de autenticación al ID público de la tabla usuarios
+      final usuarioData = await Supabase.instance.client
+          .from('usuarios')
+          .select('id')
+          .eq('auth_id', sesionActual.id)
+          .single();
 
-    if (mounted) {
-      setState(() {
-        _dioLike = interacciones.contains('upvote');
-        _votoSiguePasando = interacciones.contains('sigue_pasando');
-        _votoResuelto = interacciones.contains('ya_se_resolvio');
-        _cargandoEstado = false;
-      });
+      final ciudadanoIdReal = usuarioData['id'];
+
+      // VALIDACIÓN ESTRATÉGICA: ¿Es mi propio reporte?
+      final esPropietario = ciudadanoIdReal == widget.hecho.ciudadanoId;
+
+      final interacciones = await widget.controller.cargarMisInteracciones(
+        widget.hecho.id,
+      );
+
+      if (mounted) {
+        setState(() {
+          _esMio = esPropietario; // Guardamos el rol
+          _dioLike = interacciones.contains('upvote');
+          _votoSiguePasando = interacciones.contains('sigue_pasando');
+          _votoResuelto = interacciones.contains('ya_se_resolvio');
+          _cargandoEstado = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error al verificar propiedad: $e');
+      if (mounted) setState(() => _cargandoEstado = false);
     }
   }
 
@@ -129,7 +151,114 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
     return false;
   }
 
-  // --- LÓGICA DE UPVOTE (PRIORIDAD) ---
+  // --- ACCIONES EXCLUSIVAS DEL CREADOR (OP) ---
+
+  // 1. Cerrar caso instantáneamente con 1 clic
+  Future<void> _cerrarCasoOP() async {
+    if (_cargandoEstado) return;
+    setState(() => _cargandoEstado = true);
+
+    try {
+      await Supabase.instance.client
+          .from('hechos')
+          .update({'estado': 'resuelto'})
+          .eq('id', widget.hecho.id);
+
+      setState(() {
+        _estadoActual = 'resuelto';
+        _cargandoEstado = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('¡Solución confirmada! Gracias por avisar (+10 pts)'),
+            backgroundColor: AppColors.exito,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      widget.controller.cargarHechos(); // Refresca el mapa de fondo
+    } catch (e) {
+      setState(() => _cargandoEstado = false);
+      debugPrint('Error al cerrar caso directo: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No se pudo actualizar el estado.'),
+            backgroundColor: AppColors.problema,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  // 2. Eliminar mi reporte físicamente
+  Future<void> _eliminarMiReporte() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('¿Eliminar reporte?'),
+        content: const Text(
+          'Esta acción retirará el pin del mapa de forma permanente.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.problema,
+            ),
+            child: const Text(
+              'Eliminar',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true) return;
+
+    setState(() => _cargandoEstado = true);
+    try {
+      await Supabase.instance.client
+          .from('hechos')
+          .delete()
+          .eq('id', widget.hecho.id);
+
+      if (mounted) {
+        Navigator.pop(context); // Volvemos al feed/mapa
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Reporte eliminado correctamente.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      widget.controller.cargarHechos();
+    } catch (e) {
+      setState(() => _cargandoEstado = false);
+      debugPrint('Error al eliminar reporte: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error al eliminar. Intenta nuevamente.'),
+            backgroundColor: AppColors.problema,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  // --- ACCIONES DE LA COMUNIDAD ---
+
   Future<void> _manejarLike() async {
     if (_requiereLogin() || _cargandoEstado) return;
 
@@ -145,13 +274,10 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
 
     bool exito;
     if (estadoAnterior) {
-      // Si ya tenía upvote, lo quitamos
-      exito = await _hechosController.quitarInteraccion(
+      exito = await widget.controller.quitarInteraccion(
         widget.hecho.id,
         'upvote',
       );
-
-      // Avisamos al usuario que perdió los puntos
       if (mounted && exito) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -161,12 +287,10 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
         );
       }
     } else {
-      // Si no tenía, se lo damos
-      exito = await _hechosController.enviarInteraccion(
+      exito = await widget.controller.enviarInteraccion(
         widget.hecho.id,
         'upvote',
       );
-
       if (mounted && exito) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -178,18 +302,13 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
     }
 
     if (mounted && !exito) {
-      // Si falló internet o la BD, revertimos silenciosamente
       setState(() => _dioLike = estadoAnterior);
     }
   }
 
-  // --- LÓGICA DE COMPARTIR ---
   void _manejarCompartir() {
-    // Formateamos un mensaje atractivo para WhatsApp o Redes Sociales
     final String tipoHecho = widget.hecho.tipoHecho.toUpperCase();
     final String titulo = _obtenerEstilos()['titulo'];
-
-    // Generamos un link a Google Maps usando las coordenadas
     final String urlMapa =
         'https://maps.google.com/?q=${widget.hecho.latitud},${widget.hecho.longitud}';
 
@@ -199,25 +318,21 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
         '📍 Ubicación exacta:\n$urlMapa\n\n'
         '¡Descarga la app de RadarCO y ayúdanos a solucionar esto juntos!';
 
-    // Ejecuta el menú nativo del celular
     Share.share(mensaje, subject: 'Reporte ciudadano: $tipoHecho');
   }
 
-  // --- LÓGICA PERMANENTE (VALIDACIONES) ---
   Future<void> _manejarVotoSiguePasando() async {
-    // Bloqueado si ya votó o si el caso ya está resuelto
     if (_requiereLogin() || _cargandoEstado || _estadoActual == 'resuelto') {
       return;
     }
     if (_votoSiguePasando || _votoResuelto) return;
 
-    // UI Optimista: Registra el voto y sube el contador instantáneamente
     setState(() {
       _votoSiguePasando = true;
       _conteoSiguePasando++;
     });
 
-    final exito = await _hechosController.enviarInteraccion(
+    final exito = await widget.controller.enviarInteraccion(
       widget.hecho.id,
       'sigue_pasando',
     );
@@ -231,7 +346,6 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
           ),
         );
       } else {
-        // Revertimos si falla
         setState(() {
           _votoSiguePasando = false;
           _conteoSiguePasando--;
@@ -249,13 +363,12 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
     setState(() {
       _votoResuelto = true;
       _conteoResuelto++;
-      // LA MAGIA: Si con este voto llegamos a 3, cambiamos toda la UI del detalle a verde
       if (_conteoResuelto >= 3) {
         _estadoActual = 'resuelto';
       }
     });
 
-    final exito = await _hechosController.enviarInteraccion(
+    final exito = await widget.controller.enviarInteraccion(
       widget.hecho.id,
       'ya_se_resolvio',
     );
@@ -273,7 +386,7 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
         setState(() {
           _votoResuelto = false;
           _conteoResuelto--;
-          _estadoActual = widget.hecho.estado; // Revertimos el estado maestro
+          _estadoActual = widget.hecho.estado;
         });
       }
     }
@@ -281,11 +394,6 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
 
   void _verPerfilAutor() {
     if (widget.hecho.ciudadanoId == null) return;
-
-    debugPrint(
-      'Navegando al perfil del ciudadano: ${widget.hecho.ciudadanoId}',
-    );
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -296,18 +404,16 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
     );
   }
 
-  // --- LÓGICA AÑADIDA: ABRIR PANEL DE COMENTARIOS ---
   void _manejarComentario() {
     if (_requiereLogin()) return;
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => ComentariosSheet(
         hechoId: widget.hecho.id,
-        autorHechoId: widget.hecho.ciudadanoId, // <--- ESTO ES LO NUEVO
-        controller: _hechosController,
+        autorHechoId: widget.hecho.ciudadanoId,
+        controller: widget.controller,
       ),
     );
   }
@@ -318,52 +424,83 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      // BARRA INFERIOR DE ACCIONES
+      // --- BARRA INFERIOR DE ACCIONES ADAPTATIVA ---
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Row(
             children: [
-              InkWell(
-                onTap: _manejarLike,
-                borderRadius: BorderRadius.circular(100),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _dioLike ? AppColors.azulPrimario : Colors.grey[100],
+              // Si es MIO -> Mostramos botón de ELIMINAR en vez de Upvote
+              if (_esMio)
+                Tooltip(
+                  message: 'Eliminar mi reporte',
+                  child: InkWell(
+                    onTap: _eliminarMiReporte,
                     borderRadius: BorderRadius.circular(100),
-                    border: Border.all(
-                      color: _dioLike
-                          ? AppColors.azulPrimario
-                          : Colors.transparent,
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.arrow_upward_rounded,
-                        color: _dioLike ? Colors.white : Colors.blueGrey[600],
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.red[50],
+                        borderRadius: BorderRadius.circular(100),
+                        border: Border.all(color: Colors.red[200]!, width: 1.5),
+                      ),
+                      child: Icon(
+                        Icons.delete_outline_rounded,
+                        color: Colors.red[700],
                         size: 20,
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '$_conteoUpvotes',
-                        style: TextStyle(
-                          color: _dioLike ? Colors.white : Colors.blueGrey[800],
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    ),
+                  ),
+                )
+              // Si es COMUNIDAD -> Mostramos el Upvote normal
+              else
+                InkWell(
+                  onTap: _manejarLike,
+                  borderRadius: BorderRadius.circular(100),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _dioLike
+                          ? AppColors.azulPrimario
+                          : Colors.grey[100],
+                      borderRadius: BorderRadius.circular(100),
+                      border: Border.all(
+                        color: _dioLike
+                            ? AppColors.azulPrimario
+                            : Colors.transparent,
+                        width: 1.5,
                       ),
-                    ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.arrow_upward_rounded,
+                          color: _dioLike ? Colors.white : Colors.blueGrey[600],
+                          size: 20,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '$_conteoUpvotes',
+                          style: TextStyle(
+                            color: _dioLike
+                                ? Colors.white
+                                : Colors.blueGrey[800],
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
@@ -383,7 +520,7 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: _manejarComentario, // <--- Conectado aquí
+                  onPressed: _manejarComentario,
                   icon: const Icon(
                     Icons.add_comment,
                     size: 18,
@@ -422,7 +559,6 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                       widget.hecho.fotoUrl!,
                       fit: BoxFit.cover,
                       width: double.infinity,
-                      // 1. Efecto de carga mientras descarga la imagen
                       loadingBuilder: (context, child, loadingProgress) {
                         if (loadingProgress == null) return child;
                         return Container(
@@ -434,7 +570,6 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                           ),
                         );
                       },
-                      // 2. Protección anti-crash si la imagen se borra de Supabase
                       errorBuilder: (context, error, stackTrace) {
                         return Container(
                           color: AppColors.azulPrimario,
@@ -461,7 +596,6 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                         );
                       },
                     )
-                  // 3. Fallback si el reporte no tiene URL guardada
                   : Container(
                       color: AppColors.azulPrimario,
                       child: const Center(
@@ -501,7 +635,6 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // TÍTULO Y ESTADO
                     const SizedBox(height: 16),
                     Text(
                       estilos['titulo'],
@@ -561,7 +694,7 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
 
                     const SizedBox(height: 24),
 
-                    // TARJETA DEL USUARIO (REDISEÑO)
+                    // TARJETA DEL USUARIO
                     InkWell(
                       onTap: _verPerfilAutor,
                       borderRadius: BorderRadius.circular(16),
@@ -581,7 +714,6 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                         ),
                         child: Row(
                           children: [
-                            // Avatar con borde de nivel
                             Container(
                               padding: const EdgeInsets.all(2),
                               decoration: BoxDecoration(
@@ -646,7 +778,6 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                                 ],
                               ),
                             ),
-                            // Botón de acción minimalista
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 12,
@@ -672,14 +803,12 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
 
                     const SizedBox(height: 24),
 
-                    // DESCRIPCIÓN COMPLETA (REDISEÑO)
+                    // DESCRIPCIÓN COMPLETA
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: Colors.blueGrey.withOpacity(
-                          0.04,
-                        ), // Fondo muy sutil
+                        color: Colors.blueGrey.withOpacity(0.04),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                           color: Colors.blueGrey.withOpacity(0.08),
@@ -714,20 +843,20 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                             style: TextStyle(
                               fontSize: 15,
                               color: Colors.blueGrey[900],
-                              height:
-                                  1.6, // Mayor interlineado para mejor lectura
+                              height: 1.6,
                             ),
                           ),
                         ],
                       ),
                     ),
 
-                    const SizedBox(
-                      height: 32,
-                    ), // Espaciado antes de la validación (eliminamos el Divider)
-                    // SECCIÓN: VALIDACIÓN COMUNITARIA
+                    const SizedBox(height: 32),
+
+                    // --- ZONA CONDICIONAL: GESTIÓN (OP) vs VALIDACIÓN COMUNITARIA ---
                     Text(
-                      'VALIDACIÓN COMUNITARIA',
+                      _esMio
+                          ? 'GESTIÓN DE MI REPORTE'
+                          : 'VALIDACIÓN COMUNITARIA',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
@@ -737,91 +866,95 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Botón: Sigue Pasando
-                    Opacity(
-                      opacity: _votoResuelto ? 0.4 : 1.0,
-                      child: InkWell(
-                        onTap: _manejarVotoSiguePasando, // Protegido por login
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: _votoSiguePasando
-                                ? Colors.red[50]
-                                : Colors.transparent,
-                            border: Border.all(
+                    // Botón: Sigue Pasando (SOLO COMUNIDAD)
+                    if (!_esMio) ...[
+                      Opacity(
+                        opacity: _votoResuelto ? 0.4 : 1.0,
+                        child: InkWell(
+                          onTap: _manejarVotoSiguePasando,
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
                               color: _votoSiguePasando
-                                  ? Colors.red[200]!
-                                  : Colors.red[100]!,
+                                  ? Colors.red[50]
+                                  : Colors.transparent,
+                              border: Border.all(
+                                color: _votoSiguePasando
+                                    ? Colors.red[200]!
+                                    : Colors.red[100]!,
+                              ),
+                              borderRadius: BorderRadius.circular(20),
                             ),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: _votoSiguePasando
-                                      ? Colors.red[400]
-                                      : Colors.red[50],
-                                  shape: BoxShape.circle,
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: _votoSiguePasando
+                                        ? Colors.red[400]
+                                        : Colors.red[50],
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    _votoSiguePasando
+                                        ? Icons.check
+                                        : Icons.warning_amber_rounded,
+                                    color: _votoSiguePasando
+                                        ? Colors.white
+                                        : Colors.red[400],
+                                  ),
                                 ),
-                                child: Icon(
-                                  _votoSiguePasando
-                                      ? Icons.check
-                                      : Icons.warning_amber_rounded,
-                                  color: _votoSiguePasando
-                                      ? Colors.white
-                                      : Colors.red[400],
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      _votoSiguePasando
-                                          ? 'Confirmaste este reporte'
-                                          : 'Sigue pasando',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.blueGrey[900],
-                                        fontSize: 15,
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _votoSiguePasando
+                                            ? 'Confirmaste este reporte'
+                                            : 'Sigue pasando',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.blueGrey[900],
+                                          fontSize: 15,
+                                        ),
                                       ),
-                                    ),
-                                    Text(
-                                      _conteoSiguePasando == 1
-                                          ? '1 vecino confirmó esto'
-                                          : '$_conteoSiguePasando vecinos confirmaron esto',
-                                      style: TextStyle(
-                                        color: Colors.blueGrey[500],
-                                        fontSize: 12,
+                                      Text(
+                                        _conteoSiguePasando == 1
+                                            ? '1 vecino confirmó esto'
+                                            : '$_conteoSiguePasando vecinos confirmaron esto',
+                                        style: TextStyle(
+                                          color: Colors.blueGrey[500],
+                                          fontSize: 12,
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 12),
+                    ],
 
-                    const SizedBox(height: 12),
-
-                    // Botón: Marcar como Resuelto
-                    Opacity(
-                      opacity: _votoSiguePasando ? 0.4 : 1.0,
-                      child: InkWell(
-                        onTap: _manejarVotoResuelto, // Protegido por login
+                    // Botón: Marcar como Resuelto (CONDICIONAL ROL)
+                    if (_esMio)
+                      // UI INSTANTÁNEA PARA EL CREADOR (OP)
+                      InkWell(
+                        onTap: _estadoActual == 'resuelto'
+                            ? null
+                            : _cerrarCasoOP,
                         borderRadius: BorderRadius.circular(20),
                         child: Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: _votoResuelto
-                                ? Colors.green[700]
-                                : const Color(0xFF0A5C36),
+                            color: _estadoActual == 'resuelto'
+                                ? Colors.blueGrey[400]
+                                : AppColors.exito, // Verde brillante
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Row(
@@ -832,10 +965,8 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                                   color: Colors.white.withOpacity(0.2),
                                   shape: BoxShape.circle,
                                 ),
-                                child: Icon(
-                                  _votoResuelto
-                                      ? Icons.check
-                                      : Icons.check_circle_outline,
+                                child: const Icon(
+                                  Icons.verified_rounded,
                                   color: Colors.white,
                                 ),
                               ),
@@ -846,10 +977,8 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                                   children: [
                                     Text(
                                       _estadoActual == 'resuelto'
-                                          ? 'Problema solucionado'
-                                          : _votoResuelto
-                                          ? 'Voto de resolución enviado'
-                                          : 'Marcar como Resuelto',
+                                          ? 'Caso cerrado por ti'
+                                          : 'Marcar como Solucionado',
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         color: Colors.white,
@@ -858,8 +987,8 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                                     ),
                                     Text(
                                       _estadoActual == 'resuelto'
-                                          ? 'La comunidad verificó la solución'
-                                          : '$_conteoResuelto/3 votos comunitarios',
+                                          ? 'Gracias por mantener limpia la ciudad'
+                                          : 'Cerrar reporte instantáneamente',
                                       style: const TextStyle(
                                         color: Colors.white70,
                                         fontSize: 12,
@@ -875,8 +1004,76 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                             ],
                           ),
                         ),
+                      )
+                    else
+                      // UI POR CONSENSO PARA LA COMUNIDAD
+                      Opacity(
+                        opacity: _votoSiguePasando ? 0.4 : 1.0,
+                        child: InkWell(
+                          onTap: _manejarVotoResuelto,
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: _votoResuelto
+                                  ? Colors.green[700]
+                                  : const Color(0xFF0A5C36),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    _votoResuelto
+                                        ? Icons.check
+                                        : Icons.check_circle_outline,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _estadoActual == 'resuelto'
+                                            ? 'Problema solucionado'
+                                            : _votoResuelto
+                                            ? 'Voto de resolución enviado'
+                                            : 'Marcar como Resuelto',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                      Text(
+                                        _estadoActual == 'resuelto'
+                                            ? 'La comunidad verificó la solución'
+                                            : '$_conteoResuelto/3 votos comunitarios',
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.celebration,
+                                  color: Colors.white70,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
 
                     const SizedBox(height: 40),
                   ],

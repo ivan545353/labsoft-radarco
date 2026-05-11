@@ -28,7 +28,6 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
 
   @override
   void dispose() {
-    // Es crucial limpiar el controlador cuando la pantalla principal muera
     _hechosController.dispose();
     _usuarioController.dispose();
     super.dispose();
@@ -48,7 +47,6 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
   }
 
   // --- LAS 4 PANTALLAS PRINCIPALES ---
-  // Le pasamos el controlador prestado al mapa
   Widget get _vistaMapa =>
       _VistaMapaInteractiva(controlador: _hechosController);
   Widget get _vistaComunidad =>
@@ -86,7 +84,7 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
             actions: [
               if (estaLogueado)
                 SizedBox(
-                  width: 60, // Contenedor del icono más ancho
+                  width: 60,
                   child: IconButton(
                     icon: const Icon(Icons.logout, color: AppColors.problema),
                     onPressed: () async {
@@ -122,12 +120,10 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
               child: vistas[_indiceTabActual],
             ),
           ),
-          //quiero que este boton flotante este un poco mas arriba
+
           // --- BOTÓN FLOTANTE ---
           floatingActionButton: (_indiceTabActual == 0 || _indiceTabActual == 1)
               ? Padding(
-                  // ¡Este es el margen que eleva el botón!
-                  // 30px suele alinearlo perfectamente con la tarjeta que está a 70px.
                   padding: const EdgeInsets.only(bottom: 40.0),
                   child: FloatingActionButton(
                     onPressed: () {
@@ -222,7 +218,6 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
 // ============================================================================
 
 class _VistaMapaInteractiva extends StatefulWidget {
-  // Ahora el mapa recibe el controlador como parámetro en lugar de crearlo
   final HechosController controlador;
 
   const _VistaMapaInteractiva({required this.controlador});
@@ -277,65 +272,12 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
               },
             ),
 
-            // --- NUEVO: FILTRO FLOTANTE SUPERIOR ---
-            Positioned(
-              top: 130, // Justo debajo del AppBar transparente
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(30),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Botón "Activos"
-                      _buildFiltroPill(
-                        titulo: 'Activos',
-                        icono: Icons.bolt_rounded,
-                        esActivo:
-                            widget.controlador.filtroEstadoActual == 'activo',
-                        colorPrimario: AppColors.azulPrimario,
-                        onTap: () {
-                          setState(
-                            () => _hechoSeleccionado = null,
-                          ); // Oculta tarjeta si estaba abierta
-                          widget.controlador.cambiarFiltro('activo');
-                        },
-                      ),
-                      // Botón "Resueltos"
-                      _buildFiltroPill(
-                        titulo: 'Resueltos', // Cambio semántico
-                        icono:
-                            Icons.emoji_events_rounded, // Ícono de logro/trofeo
-                        esActivo:
-                            widget.controlador.filtroEstadoActual == 'resuelto',
-                        colorPrimario: Colors.green[600]!,
-                        onTap: () {
-                          setState(() => _hechoSeleccionado = null);
-                          widget.controlador.cambiarFiltro('resuelto');
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            // ELIMINADA LA BARRA DE FILTROS FLOTANTE POR COMPLETO (MVP ULTRA LIMPIO)
 
             // Indicador de carga
             if (widget.controlador.estaCargando)
               const Positioned(
-                top: 170, // Lo bajamos un poco para no tapar el filtro
+                top: 130, // Subido a la posición original limpia
                 left: 0,
                 right: 0,
                 child: Center(
@@ -366,50 +308,10 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
     );
   }
 
-  // NUEVO: Widget interno para construir las "píldoras" del filtro
-  Widget _buildFiltroPill({
-    required String titulo,
-    required IconData icono,
-    required bool esActivo,
-    required Color colorPrimario,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: esActivo ? colorPrimario.withOpacity(0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(25),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icono,
-              size: 16,
-              color: esActivo ? colorPrimario : Colors.grey[500],
-            ),
-            const SizedBox(width: 6),
-            Text(
-              titulo,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-                color: esActivo ? colorPrimario : Colors.grey[500],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Diseño de la Mini-Tarjeta
+  // Diseño de la Mini-Tarjeta (LIMPIADO)
   Widget _buildTarjetaPrevisualizacion(BuildContext context, HechoModel hecho) {
     Color colorCategoria;
 
-    // Si estamos viendo el historial, atenuamos los colores
     if (hecho.estado == 'resuelto') {
       colorCategoria = Colors.blueGrey;
     } else {
@@ -417,8 +319,6 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
           ? Colors.red
           : hecho.tipoHecho == 'alerta'
           ? Colors.orange
-          : hecho.tipoHecho == 'positivo'
-          ? Colors.green
           : Colors.blue;
     }
 
@@ -427,7 +327,11 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => HechoDetalleScreen(hecho: hecho),
+            builder: (context) => HechoDetalleScreen(
+              hecho: hecho,
+              controller:
+                  widget.controlador, // <--- PASAMOS EL CONTROLADOR DEL MAPA
+            ),
           ),
         );
       },
