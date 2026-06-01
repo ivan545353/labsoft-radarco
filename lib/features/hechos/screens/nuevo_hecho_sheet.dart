@@ -1,12 +1,21 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:geolocator/geolocator.dart';
 import '../../../core/theme/app_colors.dart';
 import '../models/hecho_model.dart';
 import '../controllers/hechos_controller.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+
+class CategoriaReporte {
+  final String nombre;
+  final IconData icono;
+  final String tipoBackend;
+  final Color color;
+
+  CategoriaReporte(this.nombre, this.icono, this.tipoBackend, this.color);
+}
 
 class NuevoHechoSheet extends StatefulWidget {
   final String ciudadanoId;
@@ -23,175 +32,303 @@ class NuevoHechoSheet extends StatefulWidget {
 }
 
 class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
-  String _tipoSeleccionado = 'problema';
   final TextEditingController _descripcionController = TextEditingController();
-  LatLng? _posicionActual;
-  String? _errorDescripcion;
 
-  // Variables para la cámara
+  int _pasoActual = 1; // Controla el estado del Wizard (1, 2 o 3)
+
+  CategoriaReporte? _categoriaSeleccionada;
   File? _imagenSeleccionada;
+  Position? _posicionActual;
+
+  bool _obteniendoUbicacion = true;
   bool _subiendoDatos = false;
-  final ImagePicker _picker = ImagePicker();
+  String? _errorFormulario;
+
+  // Catálogo optimizado para tarjetas de 2 columnas
+  final List<CategoriaReporte> _categorias = [
+    CategoriaReporte(
+      'Bache',
+      Icons.terrain_rounded,
+      'problema',
+      Colors.red[400]!,
+    ),
+    CategoriaReporte(
+      'Basura',
+      Icons.delete_outline_rounded,
+      'problema',
+      Colors.brown[400]!,
+    ),
+    CategoriaReporte(
+      'Luminaria',
+      Icons.lightbulb_outline_rounded,
+      'problema',
+      Colors.amber[600]!,
+    ),
+    CategoriaReporte(
+      'Agua / Caño',
+      Icons.water_drop_outlined,
+      'problema',
+      Colors.blue[400]!,
+    ),
+    CategoriaReporte(
+      'Accidente',
+      Icons.car_crash_outlined,
+      'alerta',
+      Colors.deepOrange[400]!,
+    ),
+    CategoriaReporte(
+      'Obstrucción',
+      Icons.block_flipped,
+      'alerta',
+      Colors.orange[400]!,
+    ),
+    CategoriaReporte(
+      'Inseguridad',
+      Icons.security_outlined,
+      'alerta',
+      Colors.purple[400]!,
+    ),
+    CategoriaReporte(
+      'Otro',
+      Icons.info_outline_rounded,
+      'problema',
+      Colors.blueGrey[400]!,
+    ),
+  ];
 
   @override
   void initState() {
     super.initState();
-    _obtenerUbicacion();
+    _obtenerUbicacionGPS();
   }
 
-  Future<void> _obtenerUbicacion() async {
-    bool serviceEnabled;
-    LocationPermission permission;
+  @override
+  void dispose() {
+    _descripcionController.dispose();
+    super.dispose();
+  }
 
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return;
+  // --- LOGICA DEL WIZARD ---
+  void _avanzarPaso() {
+    FocusScope.of(context).unfocus(); // Ocultar teclado al avanzar
 
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) return;
+    if (_pasoActual == 1 && _categoriaSeleccionada == null) {
+      setState(
+        () => _errorFormulario = 'Selecciona una categoría para continuar.',
+      );
+      return;
     }
 
-    if (permission == LocationPermission.deniedForever) return;
+    if (_pasoActual == 2 && _descripcionController.text.trim().isEmpty) {
+      setState(() => _errorFormulario = 'Agrega una breve descripción.');
+      return;
+    }
 
-    Position position = await Geolocator.getCurrentPosition();
-    if (mounted) {
-      setState(() {
-        _posicionActual = LatLng(position.latitude, position.longitude);
-      });
+    setState(() {
+      _errorFormulario = null;
+      _pasoActual++;
+    });
+  }
+
+  void _retrocederPaso() {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _errorFormulario = null;
+      _pasoActual--;
+    });
+  }
+
+  // --- METODOS DE DATOS ---
+  Future<void> _obtenerUbicacionGPS() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) throw Exception('GPS desactivado');
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied)
+          throw Exception('Permiso denegado');
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      if (mounted) {
+        setState(() {
+          _posicionActual = position;
+          _obteniendoUbicacion = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _obteniendoUbicacion = false;
+          _errorFormulario = 'No pudimos acceder a tu ubicación exacta.';
+        });
+      }
     }
   }
 
-  // Método para abrir la cámara o galería
-  Future<void> _seleccionarImagen() async {
-    final XFile? imagenEscogida = await _picker.pickImage(
+  Future<void> _tomarFoto() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
       source: ImageSource.camera,
-      imageQuality:
-          70, // Comprimimos al 70% para ahorrar datos y no saturar la memoria
-      maxWidth: 1024,
+      imageQuality: 80,
+      maxWidth: 1200,
     );
 
-    if (imagenEscogida != null && mounted) {
+    if (pickedFile != null && mounted) {
       setState(() {
-        _imagenSeleccionada = File(imagenEscogida.path);
+        _imagenSeleccionada = File(pickedFile.path);
+        _errorFormulario = null;
       });
     }
   }
 
-  // Subida de imagen al Storage organizada por carpetas
   Future<String?> _subirImagenASupabase(
-    File archivoImagen,
-    String ciudadanoIdReal,
+    File imagenOriginal,
+    String idUsuario,
   ) async {
     try {
-      final supabase = Supabase.instance.client;
-      final extension = archivoImagen.path.split('.').last;
-      final nombreArchivo =
-          '${DateTime.now().millisecondsSinceEpoch}.$extension';
+      // 1. Definir ruta temporal para la imagen comprimida
+      final lastIndex = imagenOriginal.absolute.path.lastIndexOf(
+        RegExp(r'.jp'),
+      );
+      final splitted = imagenOriginal.absolute.path.substring(0, (lastIndex));
+      final outPath = "${splitted}_compressed.jpg";
 
-      final rutaArchivo = '$ciudadanoIdReal/$nombreArchivo';
+      // 2. Compresión Física agresiva pero sin pérdida visible de calidad
+      var result = await FlutterImageCompress.compressAndGetFile(
+        imagenOriginal.absolute.path,
+        outPath,
+        quality: 60, // Comprime la calidad a un 60% (ideal para móviles)
+        minWidth: 1024, // Limita el ancho máximo para no subir 4K
+        minHeight: 1024,
+      );
 
-      await supabase.storage
+      // Si falla la compresión, usamos la original como plan B
+      File archivoFinal = result != null ? File(result.path) : imagenOriginal;
+
+      // 3. Subir a Supabase
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}_$idUsuario.jpg';
+      final ruta = 'reportes/$fileName';
+
+      await Supabase.instance.client.storage
           .from('fotos_hechos')
-          .upload(rutaArchivo, archivoImagen);
+          .upload(ruta, archivoFinal);
 
-      final urlPublica = supabase.storage
+      return Supabase.instance.client.storage
           .from('fotos_hechos')
-          .getPublicUrl(rutaArchivo);
-      return urlPublica;
+          .getPublicUrl(ruta);
     } catch (e) {
-      debugPrint('Error al subir imagen: $e');
+      debugPrint('Error subiendo imagen comprimida: $e');
       return null;
     }
   }
 
   void _enviarReporte() async {
-    final textoDescripcion = _descripcionController.text.trim();
-
-    // 1. Validar que haya descripción
-    if (textoDescripcion.isEmpty) {
+    if (_categoriaSeleccionada == null) {
+      setState(() => _errorFormulario = 'Por favor, selecciona una categoría.');
+      return;
+    }
+    if (_descripcionController.text.trim().isEmpty) {
       setState(
-        () => _errorDescripcion =
-            'Por favor, describe el hecho para la comunidad.',
+        () => _errorFormulario = 'Agrega una breve descripción del reporte.',
       );
       return;
     }
-
-    // 2. Validar que haya tomado una foto
     if (_imagenSeleccionada == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Debes adjuntar una foto del reporte.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      setState(() => _errorFormulario = 'Falta la foto del reporte.');
       return;
     }
-
-    // 3. Validar ubicación
     if (_posicionActual == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Buscando tu ubicación... intenta de nuevo.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      setState(() => _errorFormulario = 'Esperando ubicación GPS...');
       return;
     }
 
-    setState(() => _subiendoDatos = true);
+    setState(() {
+      _subiendoDatos = true;
+      _errorFormulario = null;
+    });
 
     try {
-      // 4. TRADUCCIÓN DE ID: Buscamos el ID público del ciudadano actual
-      final supabase = Supabase.instance.client;
-      final user = supabase.auth.currentUser;
+      // --- 🛑 INTERCEPTOR DE DUPLICADOS TEMPORALMENTE DESACTIVADO PARA PRUEBAS ---
+      /*
+      final hechoOriginal = widget.controller.detectarDuplicado(
+        _categoriaSeleccionada!.tipoBackend,
+        _posicionActual!.latitude,
+        _posicionActual!.longitude,
+      );
 
-      if (user == null) {
-        throw Exception('No hay una sesión activa.');
+      if (hechoOriginal != null) {
+        await widget.controller.enviarInteraccion(hechoOriginal.id, 'sigue_pasando');
+        await widget.controller.cargarHechos();
+
+        if (!mounted) return;
+        setState(() => _subiendoDatos = false);
+        Navigator.pop(context);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              '📍 ¡Aviso fusionado! Alguien ya reportó esto cerca.',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+            backgroundColor: AppColors.azulPrimario,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+        return; 
+      }
+      */
+      // ------------------------------------------------------------------------
+
+      // 2. TRADUCCIÓN DE ID (Con Fallback de Seguridad RLS)
+      String ciudadanoIdReal = widget.ciudadanoId;
+      try {
+        final usuarioData = await Supabase.instance.client
+            .from('usuarios')
+            .select('id')
+            .eq('auth_id', widget.ciudadanoId)
+            .maybeSingle();
+
+        if (usuarioData != null) {
+          ciudadanoIdReal = usuarioData['id'];
+        }
+      } catch (err) {
+        debugPrint('Aviso: No se pudo traducir el ID. Usando original. $err');
       }
 
-      final usuarioData = await supabase
-          .from('usuarios')
-          .select('id')
-          .eq('auth_id', user.id)
-          .single();
-
-      final ciudadanoIdReal = usuarioData['id'];
-
-      // 5. Subir imagen asociándola al ID real
+      // 3. SUBIR IMAGEN A STORAGE
       final urlFotoReal = await _subirImagenASupabase(
         _imagenSeleccionada!,
         ciudadanoIdReal,
       );
 
-      if (urlFotoReal == null) {
-        setState(() => _subiendoDatos = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Error al subir la foto. Intenta nuevamente.'),
-              backgroundColor: AppColors.problema,
-            ),
-          );
-        }
-        return;
-      }
+      if (urlFotoReal == null)
+        throw Exception('Fallo la subida al Storage de imágenes de Supabase.');
 
-      // 6. Crear el modelo inyectando el ID PÚBLICO
+      // 4. ARMAR EL MODELO DEFINITIVO
+      final descripcionFinal =
+          '[${_categoriaSeleccionada!.nombre}] - ${_descripcionController.text.trim()}';
+
       final nuevoHecho = HechoModel(
-        id: '',
+        id: '', // Se autogenera en la BD
         ciudadanoId: ciudadanoIdReal,
-        tipoHecho: _tipoSeleccionado,
+        tipoHecho: _categoriaSeleccionada!.tipoBackend,
         latitud: _posicionActual!.latitude,
         longitud: _posicionActual!.longitude,
         fotoUrl: urlFotoReal,
         estado: 'activo',
         creadoEn: DateTime.now(),
-        caducaEn: DateTime.now().add(const Duration(days: 3)),
-        descripcion: textoDescripcion,
+        descripcion: descripcionFinal,
       );
 
-      // 7. Enviar a base de datos
+      // 5. PUBLICAR
       final exito = await widget.controller.publicarNuevoHecho(nuevoHecho);
 
       if (!mounted) return;
@@ -201,310 +338,504 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('¡Reporte publicado con éxito! (+15 pts)'),
+            content: Text('¡Reporte publicado con éxito!'),
             backgroundColor: AppColors.exito,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              widget.controller.mensajeError ?? 'Error al publicar',
-            ),
-            backgroundColor: AppColors.problema,
-          ),
+        setState(
+          () => _errorFormulario =
+              widget.controller.mensajeError ??
+              'Error devuelto por el controlador.',
         );
       }
     } catch (e) {
+      debugPrint('⚠️ ERROR CRÍTICO: $e');
       if (!mounted) return;
-      setState(() => _subiendoDatos = false);
-      debugPrint('Error crítico al enviar reporte: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Error de conexión. Intenta nuevamente.'),
-          backgroundColor: AppColors.problema,
-        ),
-      );
+      setState(() {
+        _subiendoDatos = false;
+        _errorFormulario = 'DEBUG SQL: ${e.toString()}';
+      });
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      decoration: const BoxDecoration(
-        color: AppColors.fondoGeneral,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-      ),
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'NUEVO REPORTE',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.azulPrimario,
-                  letterSpacing: 1.2,
-                ),
-              ),
-              const SizedBox(height: 20),
+  // --- VISTAS DE LOS 3 PASOS ---
 
-              // --- ZONA DE CÁMARA INTERACTIVA ---
-              GestureDetector(
-                onTap: _subiendoDatos ? null : _seleccionarImagen,
-                child: Container(
-                  height: 140,
-                  width: double.infinity,
+  Widget _buildPaso1() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '¿Qué quieres reportar?',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF1D1E20),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Selecciona la categoría que mejor describa el problema.',
+          style: TextStyle(color: Colors.blueGrey[400], fontSize: 14),
+        ),
+        const SizedBox(height: 24),
+        Expanded(
+          child: GridView.builder(
+            padding: const EdgeInsets.only(bottom: 20),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2, // ¡Tarjetas masivas y accesibles!
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+              childAspectRatio: 1.4,
+            ),
+            itemCount: _categorias.length,
+            itemBuilder: (context, index) {
+              final cat = _categorias[index];
+              final seleccionado = _categoriaSeleccionada == cat;
+
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _categoriaSeleccionada = cat;
+                    _errorFormulario = null;
+                  });
+                  // Avanza automáticamente al tocar para ser más ágil
+                  Future.delayed(
+                    const Duration(milliseconds: 300),
+                    _avanzarPaso,
+                  );
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: seleccionado
+                        ? AppColors.azulPrimario
+                        : Colors.grey[50],
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: _imagenSeleccionada == null
-                          ? AppColors.azulPrimario.withOpacity(0.3)
-                          : Colors.transparent,
+                      color: seleccionado
+                          ? AppColors.azulPrimario
+                          : Colors.grey[200]!,
+                      width: 2,
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
+                    boxShadow: seleccionado
+                        ? [
+                            BoxShadow(
+                              color: AppColors.azulPrimario.withOpacity(0.3),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ]
+                        : [],
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        cat.icono,
+                        color: seleccionado ? Colors.white : cat.color,
+                        size: 32,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        cat.nombre,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: seleccionado
+                              ? FontWeight.bold
+                              : FontWeight.w600,
+                          color: seleccionado
+                              ? Colors.white
+                              : Colors.blueGrey[700],
+                        ),
                       ),
                     ],
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: _imagenSeleccionada != null
-                        ? Image.file(
-                            _imagenSeleccionada!,
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                          )
-                        : Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.add_a_photo,
-                                size: 40,
-                                color: AppColors.azulPrimario.withOpacity(0.5),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Toca para tomar una foto',
-                                style: TextStyle(
-                                  color: Colors.blueGrey[400],
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPaso2() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Agrega los detalles',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF1D1E20),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Brinda información clara para que los demás vecinos lo ubiquen rápidamente.',
+          style: TextStyle(color: Colors.blueGrey[400], fontSize: 14),
+        ),
+        const SizedBox(height: 24),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.grey[200]!),
+          ),
+          child: TextField(
+            controller: _descripcionController,
+            maxLines: 6,
+            autofocus: true,
+            textInputAction: TextInputAction.done,
+            style: const TextStyle(fontSize: 16),
+            decoration: InputDecoration(
+              hintText:
+                  'Ej: Pozo profundo en la esquina de la plaza principal. Hay que esquivarlo con cuidado...',
+              hintStyle: TextStyle(
+                color: Colors.grey[400],
+                fontSize: 15,
+                height: 1.5,
+              ),
+              contentPadding: const EdgeInsets.all(20),
+              border: InputBorder.none,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPaso3() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Evidencia visual',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF1D1E20),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Una imagen vale más que mil palabras. Asegúrate de mostrar claramente el reporte.',
+          style: TextStyle(color: Colors.blueGrey[400], fontSize: 14),
+        ),
+        const SizedBox(height: 24),
+
+        // BOTÓN CÁMARA GIGANTE
+        Expanded(
+          child: InkWell(
+            onTap: _tomarFoto,
+            borderRadius: BorderRadius.circular(24),
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.blueGrey[50],
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: _imagenSeleccionada != null
+                      ? AppColors.exito
+                      : Colors.blueGrey[200]!,
+                  width: _imagenSeleccionada != null ? 3 : 2,
+                ),
+              ),
+              child: _imagenSeleccionada != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(21),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.file(_imagenSeleccionada!, fit: BoxFit.cover),
+                          Container(
+                            color: Colors.black38,
+                          ), // Capa oscura para contraste
+                          const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.check_circle,
+                                  color: Colors.white,
+                                  size: 48,
                                 ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Tocar para cambiar',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 10,
                               ),
                             ],
                           ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // CATEGORÍAS (Excluida la opción 'Positivo' para el MVP)
-              Text(
-                'CATEGORÍA',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[600],
-                  letterSpacing: 1.0,
-                ),
-              ),
-              const SizedBox(height: 12),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _CategoriaChip(
-                      label: 'Problema',
-                      icon: Icons.warning_amber_rounded,
-                      color: AppColors.problema,
-                      isSelected: _tipoSeleccionado == 'problema',
-                      onTap: () =>
-                          setState(() => _tipoSeleccionado = 'problema'),
-                    ),
-                    const SizedBox(width: 8),
-                    _CategoriaChip(
-                      label: 'Alerta',
-                      icon: Icons.error_outline,
-                      color: AppColors.alerta,
-                      isSelected: _tipoSeleccionado == 'alerta',
-                      onTap: () => setState(() => _tipoSeleccionado = 'alerta'),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // DESCRIPCIÓN CON VALIDACIÓN VISUAL
-              Text(
-                'DESCRIPCIÓN',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[600],
-                  letterSpacing: 1.0,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: _errorDescripcion != null
-                        ? Colors.red
-                        : Colors.grey[200]!,
-                    width: _errorDescripcion != null ? 1.5 : 1.0,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.03),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: TextField(
-                  controller: _descripcionController,
-                  maxLines: 4,
-                  onChanged: (valor) {
-                    if (_errorDescripcion != null) {
-                      setState(() => _errorDescripcion = null);
-                    }
-                  },
-                  decoration: InputDecoration(
-                    hintText:
-                        '¿Qué estás viendo? Danos algunos detalles para el equipo de la ciudad...',
-                    hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-                    contentPadding: const EdgeInsets.all(16),
-                    border: InputBorder.none,
-                  ),
-                ),
-              ),
-              if (_errorDescripcion != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8, left: 16),
-                  child: Text(
-                    _errorDescripcion!,
-                    style: const TextStyle(
-                      color: Colors.red,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-
-              const SizedBox(height: 30),
-
-              // BOTÓN PUBLICAR CON ESTADO DE CARGA
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _subiendoDatos ? null : _enviarReporte,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.azulPrimario,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    elevation: 5,
-                    shadowColor: AppColors.azulPrimario.withOpacity(0.5),
-                  ),
-                  child: _subiendoDatos
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Text(
-                          'Publicar Reporte',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                          child: const Icon(
+                            Icons.camera_alt_rounded,
+                            color: AppColors.azulPrimario,
+                            size: 40,
                           ),
                         ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Tocar para abrir la cámara',
+                          style: TextStyle(
+                            color: Colors.blueGrey[600],
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // ESTATUS GPS SUTIL
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          decoration: BoxDecoration(
+            color: _obteniendoUbicacion
+                ? Colors.orange[50]
+                : AppColors.exito.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _obteniendoUbicacion
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(
+                      Icons.gps_fixed,
+                      color: AppColors.exito,
+                      size: 18,
+                    ),
+              const SizedBox(width: 8),
+              Text(
+                _obteniendoUbicacion
+                    ? 'Obteniendo ubicación exacta...'
+                    : 'Ubicación GPS fijada correctamente',
+                style: TextStyle(
+                  color: _obteniendoUbicacion
+                      ? Colors.orange[800]
+                      : AppColors.exito,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ],
           ),
         ),
-      ),
+      ],
     );
   }
-}
-
-class _CategoriaChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color color;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _CategoriaChip({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.isSelected,
-    required this.onTap,
-  });
 
   @override
   Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
     return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected ? color : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isSelected ? color : Colors.grey[300]!),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: color.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
-              : [],
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Container(
+        margin: const EdgeInsets.only(top: kToolbarHeight),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+        child: Column(
           children: [
-            Icon(icon, size: 18, color: isSelected ? Colors.white : color),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: isSelected ? Colors.white : Colors.grey[700],
+            // HANDLE Y BARRA DE PROGRESO
+            Center(
+              child: Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 16),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: Row(
+                children: [
+                  Text(
+                    'Paso $_pasoActual de 3',
+                    style: TextStyle(
+                      color: Colors.blueGrey[400],
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: LinearProgressIndicator(
+                      value: _pasoActual / 3,
+                      backgroundColor: Colors.grey[200],
+                      color: AppColors.azulPrimario,
+                      borderRadius: BorderRadius.circular(10),
+                      minHeight: 6,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // CONTENIDO DINÁMICO (WIZARD)
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  24,
+                  0,
+                  24,
+                  16 + MediaQuery.of(context).padding.bottom,
+                ),
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        switchInCurve: Curves.easeOut,
+                        switchOutCurve: Curves.easeIn,
+                        child: KeyedSubtree(
+                          key: ValueKey<int>(_pasoActual),
+                          child: _pasoActual == 1
+                              ? _buildPaso1()
+                              : _pasoActual == 2
+                              ? _buildPaso2()
+                              : _buildPaso3(),
+                        ),
+                      ),
+                    ),
+
+                    // MENSAJE DE ERROR GLOBAL
+                    if (_errorFormulario != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.red[50],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.red[100]!),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              color: Colors.red[400],
+                              size: 20,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                _errorFormulario!,
+                                style: TextStyle(
+                                  color: Colors.red[700],
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 16),
+
+                    // CONTROLES INFERIORES (Atrás / Continuar)
+                    Row(
+                      children: [
+                        if (_pasoActual > 1) ...[
+                          OutlinedButton(
+                            onPressed: _subiendoDatos ? null : _retrocederPaso,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.blueGrey[600],
+                              side: BorderSide(color: Colors.grey[300]!),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 16,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.arrow_back_ios_rounded,
+                              size: 18,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                        ],
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: _subiendoDatos
+                                ? null
+                                : (_pasoActual == 3
+                                      ? _enviarReporte
+                                      : _avanzarPaso),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.azulPrimario,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: _subiendoDatos
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 3,
+                                    ),
+                                  )
+                                : Text(
+                                    _pasoActual == 3
+                                        ? 'Publicar Reporte'
+                                        : 'Continuar',
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ],

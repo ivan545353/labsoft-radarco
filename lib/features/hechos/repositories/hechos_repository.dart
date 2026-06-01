@@ -39,12 +39,17 @@ class HechosRepository {
     String estado = 'activo',
   }) async {
     try {
-      // Ahora consultamos la VISTA en lugar de la tabla
-      final response = await _supabase
-          .from('vista_hechos_comunidad')
-          .select() // Ya no necesitamos hacer el inner join aquí, la vista lo hace
-          .eq('estado', estado)
-          .order('creado_en', ascending: false);
+      // ✅ Solución al bloqueo de reportes:
+      // Construimos la consulta base sin filtros
+      var query = _supabase.from('vista_hechos_comunidad').select();
+
+      // Aplicamos el filtro en la base de datos SOLO si no nos piden 'todos'
+      if (estado != 'todos') {
+        query = query.eq('estado', estado);
+      }
+
+      // Ordenamos y ejecutamos
+      final response = await query.order('creado_en', ascending: false);
 
       // El mapeo se vuelve directo
       return (response as List).map((json) {

@@ -12,6 +12,9 @@ class UsuarioController extends ChangeNotifier {
   bool _estaCargando = false;
   bool get estaCargando => _estaCargando;
 
+  String? _mensajeError;
+  String? get mensajeError => _mensajeError;
+
   // Carga los datos del ciudadano desde la tabla pública 'usuarios'
   Future<void> cargarPerfil() async {
     final user = Supabase.instance.client.auth.currentUser;
@@ -27,6 +30,39 @@ class UsuarioController extends ChangeNotifier {
     } finally {
       _estaCargando = false;
       notifyListeners();
+    }
+  }
+
+  Future<bool> actualizarPerfil({
+    required String alias,
+    required String avatarUrl,
+  }) async {
+    _estaCargando = true;
+    _mensajeError = null;
+    notifyListeners();
+
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) throw Exception("Sesión no encontrada");
+
+      // Actualizamos en la base de datos
+      await Supabase.instance.client
+          .from('usuarios')
+          .update({
+            'alias': alias,
+            'avatar_url': avatarUrl,
+            'actualizado_en': DateTime.now().toIso8601String(),
+          })
+          .eq('auth_id', user.id);
+
+      // Recargamos el perfil local para que la UI se entere
+      await cargarPerfil();
+      return true;
+    } catch (e) {
+      _mensajeError = 'Error al guardar: $e';
+      _estaCargando = false;
+      notifyListeners();
+      return false;
     }
   }
 }

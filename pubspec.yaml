@@ -40,6 +40,8 @@ dependencies:
   geolocator: ^10.1.0 # Para obtener la ubicación del ciudadano
   image_picker: ^1.2.1
   share_plus: ^13.1.0
+  flutter_image_compress: ^2.4.0
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:
@@ -51,6 +53,8 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.7
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -91,4 +95,19 @@ flutter:
   #         weight: 700
   #
   # For details regarding fonts from package dependencies,
-  # see https://flutter.dev/to/font-from-package
+  # see https://flutter.dev/to/font-from-package
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/logo.png"
+  min_sdk_android: 21 # Evita errores en versiones antiguas de Android
+
+flutter_native_splash:
+  color: "#F4F7FB" # Usamos el mismo color de fondo de tus pantallas
+  image: "assets/logo.png"
+  
+  # Configuración obligatoria para los nuevos estándares de Android 12+
+  android_12:
+    image: "assets/logo.png"
+    icon_background_color: "#F4F7FB"

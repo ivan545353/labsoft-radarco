@@ -5,6 +5,7 @@ class UsuarioModel {
   final String alias;
   final int reputacion;
   final DateTime creadoEn;
+  final String? avatarUrl;
 
   UsuarioModel({
     required this.id,
@@ -13,6 +14,7 @@ class UsuarioModel {
     required this.alias,
     this.reputacion = 0,
     required this.creadoEn,
+    this.avatarUrl,
   });
 
   // Este método (Equivalente a un "Mapper") convierte el JSON de Supabase en un Objeto Dart
@@ -24,6 +26,7 @@ class UsuarioModel {
       alias: json['alias'] as String,
       reputacion: json['reputacion'] as int? ?? 0,
       creadoEn: DateTime.parse(json['creado_en'] as String),
+      avatarUrl: json['avatar_url'] as String?,
     );
   }
 
@@ -35,6 +38,7 @@ class UsuarioModel {
       'rol': rol,
       'alias': alias,
       'reputacion': reputacion,
+      'avatar_url': avatarUrl,
     };
   }
 }

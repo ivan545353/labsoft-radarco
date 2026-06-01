@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_colors.dart';
@@ -33,7 +34,6 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
     super.dispose();
   }
 
-  // --- LAZY LOGIN ---
   void _verificarAccesoCiudadano(VoidCallback accionPermitida) {
     final sesionActual = Supabase.instance.client.auth.currentSession;
     if (sesionActual == null) {
@@ -46,7 +46,6 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
     }
   }
 
-  // --- LAS 4 PANTALLAS PRINCIPALES ---
   Widget get _vistaMapa =>
       _VistaMapaInteractiva(controlador: _hechosController);
   Widget get _vistaComunidad =>
@@ -55,6 +54,7 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
   Widget get _vistaPerfil => PerfilUsuarioScreen(
     authController: _authController,
     usuarioController: _usuarioController,
+    hechosController: _hechosController,
   );
 
   @override
@@ -74,147 +74,225 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
 
         return Scaffold(
           extendBodyBehindAppBar: true,
+          extendBody: true,
+
           appBar: AppBar(
-            backgroundColor: Colors.white.withOpacity(0.8),
+            backgroundColor: Colors.white.withOpacity(0.7),
+            flexibleSpace: ClipRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(color: Colors.transparent),
+              ),
+            ),
             elevation: 0,
             title: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [SvgPicture.asset('assets/logo.svg', height: 70)],
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: SvgPicture.asset('assets/logo.svg', height: 45),
+                ),
+              ],
             ),
             actions: [
               if (estaLogueado)
-                SizedBox(
-                  width: 60,
+                Container(
+                  margin: const EdgeInsets.only(right: 8),
                   child: IconButton(
-                    icon: const Icon(Icons.logout, color: AppColors.problema),
+                    icon: const Icon(
+                      Icons.logout_rounded,
+                      color: Colors.blueGrey,
+                    ),
                     onPressed: () async {
                       await _authController.cerrarSesion();
                       setState(() => _indiceTabActual = 0);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Sesión cerrada')),
+                        const SnackBar(
+                          content: Text('Sesión cerrada exitosamente'),
+                        ),
                       );
                     },
                   ),
                 )
               else
-                TextButton(
-                  onPressed: () => _verificarAccesoCiudadano(() {}),
-                  child: const Text(
-                    'Ingresar',
-                    style: TextStyle(
-                      color: AppColors.azulPrimario,
-                      fontWeight: FontWeight.bold,
+                Container(
+                  margin: const EdgeInsets.only(right: 12),
+                  child: TextButton(
+                    onPressed: () => _verificarAccesoCiudadano(() {}),
+                    style: TextButton.styleFrom(
+                      backgroundColor: AppColors.azulPrimario.withOpacity(0.1),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                    ),
+                    child: const Text(
+                      'Ingresar',
+                      style: TextStyle(
+                        color: AppColors.azulPrimario,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
                 ),
             ],
           ),
 
-          body: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            transitionBuilder: (Widget child, Animation<double> animation) {
-              return FadeTransition(opacity: animation, child: child);
-            },
-            child: KeyedSubtree(
-              key: ValueKey<int>(_indiceTabActual),
-              child: vistas[_indiceTabActual],
-            ),
-          ),
-
-          // --- BOTÓN FLOTANTE ---
-          floatingActionButton: (_indiceTabActual == 0 || _indiceTabActual == 1)
-              ? Padding(
-                  padding: const EdgeInsets.only(bottom: 40.0),
-                  child: FloatingActionButton(
-                    onPressed: () {
-                      _verificarAccesoCiudadano(() {
-                        final userId =
-                            Supabase.instance.client.auth.currentUser!.id;
-
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (context) => NuevoHechoSheet(
-                            ciudadanoId: userId,
-                            controller: _hechosController,
-                          ),
-                        );
-                      });
-                    },
-                    backgroundColor: AppColors.azulPrimario,
-                    elevation: 8,
-                    child: const Icon(Icons.add, color: Colors.white, size: 30),
-                  ),
-                )
-              : null,
-          floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-
-          bottomNavigationBar: Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.9),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 20,
-                  offset: const Offset(0, -5),
-                ),
-              ],
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(30),
-                topRight: Radius.circular(30),
-              ),
-            ),
-            child: ClipRRect(
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(30),
-                topRight: Radius.circular(30),
-              ),
-              child: BottomNavigationBar(
-                currentIndex: _indiceTabActual,
-                onTap: (index) {
-                  if (index == 1 || index == 2 || index == 3) {
-                    _verificarAccesoCiudadano(() {
-                      setState(() => _indiceTabActual = index);
-                    });
-                  } else {
-                    setState(() => _indiceTabActual = index);
-                  }
+          body: Stack(
+            children: [
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                transitionBuilder: (Widget child, Animation<double> animation) {
+                  return FadeTransition(opacity: animation, child: child);
                 },
-                type: BottomNavigationBarType.fixed,
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                selectedItemColor: AppColors.azulPrimario,
-                unselectedItemColor: Colors.grey,
-                items: const [
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.map),
-                    label: 'Explorar',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.dynamic_feed),
-                    label: 'Comunidad',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.notifications_none),
-                    label: 'Actividad',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.person_outline),
-                    label: 'Perfil',
-                  ),
-                ],
+                child: KeyedSubtree(
+                  key: ValueKey<int>(_indiceTabActual),
+                  child: vistas[_indiceTabActual],
+                ),
               ),
-            ),
+
+              // --- SMART DOCK ---
+              Positioned(
+                bottom: 24,
+                left: 24,
+                right: 24,
+                child: SafeArea(child: _buildRadarDock()),
+              ),
+            ],
           ),
         );
       },
     );
   }
+
+  Widget _buildRadarDock() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(40),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.85),
+            borderRadius: BorderRadius.circular(40),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.6),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 25,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildNavItem(0, Icons.map_rounded, 'Mapa'),
+              _buildNavItem(1, Icons.dynamic_feed_rounded, 'Feed'),
+
+              GestureDetector(
+                onTap: () {
+                  _verificarAccesoCiudadano(() {
+                    final userId =
+                        Supabase.instance.client.auth.currentUser!.id;
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (context) => NuevoHechoSheet(
+                        ciudadanoId: userId,
+                        controller: _hechosController,
+                      ),
+                    );
+                  });
+                },
+                child: Container(
+                  height: 50,
+                  width: 50,
+                  decoration: BoxDecoration(
+                    color: AppColors.azulPrimario,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.azulPrimario.withOpacity(0.4),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.add_location_alt_rounded,
+                    color: Colors.white,
+                    size: 26,
+                  ),
+                ),
+              ),
+
+              _buildNavItem(2, Icons.notifications_rounded, 'Avisos'),
+              _buildNavItem(3, Icons.person_rounded, 'Perfil'),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem(int index, IconData icon, String label) {
+    final isSelected = _indiceTabActual == index;
+
+    return GestureDetector(
+      onTap: () {
+        if (index == 1 || index == 2 || index == 3) {
+          _verificarAccesoCiudadano(
+            () => setState(() => _indiceTabActual = index),
+          );
+        } else {
+          setState(() => _indiceTabActual = index);
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutQuint,
+        padding: EdgeInsets.symmetric(
+          horizontal: isSelected ? 16 : 12,
+          vertical: 10,
+        ),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.azulPrimario.withOpacity(0.1)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? AppColors.azulPrimario : Colors.blueGrey[400],
+              size: 24,
+            ),
+            if (isSelected) ...[
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.azulPrimario,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ============================================================================
-// SUB-WIDGETS DE VISTAS
+// SUB-WIDGET DEL MAPA (CON FILTROS FLOTANTES Y MINI-TARJETA)
 // ============================================================================
 
 class _VistaMapaInteractiva extends StatefulWidget {
@@ -234,21 +312,274 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
 
   HechoModel? _hechoSeleccionado;
 
+  // --- VARIABLES DE FILTRO ---
+  String _filtroEstado = 'Todos';
+  String _filtroTiempo = 'Siempre';
+  String _filtroCategoria = 'Todas';
+
+  final List<String> _categorias = [
+    'Todas',
+    'Bache',
+    'Basura',
+    'Luminaria',
+    'Agua / Caño',
+    'Accidente',
+    'Obstrucción',
+    'Inseguridad',
+    'Otro',
+  ];
+
   @override
   void initState() {
     super.initState();
-
     widget.controlador.setAbrirDetalleCallback((hechoTocado) {
-      setState(() {
-        _hechoSeleccionado = hechoTocado;
-      });
+      setState(() => _hechoSeleccionado = hechoTocado);
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (widget.controlador.hechosActivos.isEmpty) {
+      if (widget.controlador.hechosActivos.isEmpty)
         widget.controlador.cargarHechos();
-      }
     });
+  }
+
+  // --- INTELIGENCIA DE PARSEO ---
+  Map<String, String> _parsearDescripcion(String descRaw, String tipoBackend) {
+    final match = RegExp(r'^\[(.*?)\] - (.*)$').firstMatch(descRaw);
+    if (match != null)
+      return {
+        'categoria': match.group(1) ?? 'Reporte',
+        'descripcion': match.group(2) ?? '',
+      };
+    return {
+      'categoria': tipoBackend == 'problema' ? 'Problema' : 'Alerta',
+      'descripcion': descRaw,
+    };
+  }
+
+  String _extraerCategoria(String descripcion, String tipoBackend) {
+    return _parsearDescripcion(descripcion, tipoBackend)['categoria']!;
+  }
+
+  Map<String, dynamic> _getEstilosCategoria(
+    String categoria,
+    String tipoBackend,
+  ) {
+    switch (categoria) {
+      case 'Bache':
+        return {'icono': Icons.terrain_rounded, 'color': Colors.red[500]};
+      case 'Basura':
+        return {
+          'icono': Icons.delete_outline_rounded,
+          'color': Colors.brown[400],
+        };
+      case 'Luminaria':
+        return {
+          'icono': Icons.lightbulb_outline_rounded,
+          'color': Colors.amber[600],
+        };
+      case 'Agua / Caño':
+        return {'icono': Icons.water_drop_outlined, 'color': Colors.blue[500]};
+      case 'Accidente':
+        return {
+          'icono': Icons.car_crash_outlined,
+          'color': Colors.deepOrange[500],
+        };
+      case 'Obstrucción':
+        return {'icono': Icons.block_flipped, 'color': Colors.orange[500]};
+      case 'Inseguridad':
+        return {'icono': Icons.security_outlined, 'color': Colors.purple[400]};
+      default:
+        return tipoBackend == 'alerta'
+            ? {'icono': Icons.warning_rounded, 'color': Colors.orange[500]}
+            : {
+                'icono': Icons.report_problem_rounded,
+                'color': Colors.blueGrey[500],
+              };
+    }
+  }
+
+  void _abrirPanelFiltrosAvanzados() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return Container(
+              padding: const EdgeInsets.all(24),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+              ),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      'Filtros del Mapa',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.blueGrey[900],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    Text(
+                      'ESTADO DEL REPORTE',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blueGrey[400],
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 10,
+                      children: ['Todos', 'Activos', 'Resueltos'].map((estado) {
+                        final isSelected = _filtroEstado == estado;
+                        return ChoiceChip(
+                          label: Text(
+                            estado,
+                            style: TextStyle(
+                              color: isSelected
+                                  ? Colors.white
+                                  : Colors.blueGrey[700],
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                          selected: isSelected,
+                          onSelected: (val) {
+                            if (val)
+                              setModalState(() => _filtroEstado = estado);
+                            setState(() {});
+                          },
+                          selectedColor: AppColors.azulPrimario,
+                          backgroundColor: Colors.grey[50],
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 24),
+
+                    Text(
+                      'ANTIGÜEDAD',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blueGrey[400],
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: ['Siempre', 'Hoy', 'Semana', 'Mes'].map((
+                        tiempo,
+                      ) {
+                        final isSelected = _filtroTiempo == tiempo;
+                        return ChoiceChip(
+                          label: Text(
+                            tiempo == 'Semana'
+                                ? 'Últimos 7 días'
+                                : tiempo == 'Mes'
+                                ? 'Últimos 30 días'
+                                : tiempo,
+                            style: TextStyle(
+                              color: isSelected
+                                  ? Colors.white
+                                  : Colors.blueGrey[700],
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                          selected: isSelected,
+                          onSelected: (val) {
+                            if (val)
+                              setModalState(() => _filtroTiempo = tiempo);
+                            setState(() {});
+                          },
+                          selectedColor: AppColors.azulPrimario,
+                          backgroundColor: Colors.grey[50],
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 24),
+
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () {
+                            setModalState(() {
+                              _filtroEstado = 'Todos';
+                              _filtroTiempo = 'Siempre';
+                              _filtroCategoria = 'Todas';
+                            });
+                            setState(() {});
+                            Navigator.pop(context);
+                          },
+                          child: const Text(
+                            'Limpiar',
+                            style: TextStyle(
+                              color: Colors.blueGrey,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.azulPrimario,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 32,
+                              vertical: 14,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: const Text(
+                            'Aplicar Filtros',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -256,6 +587,52 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
     return ListenableBuilder(
       listenable: widget.controlador,
       builder: (context, child) {
+        // --- 1. FILTRADO DINÁMICO DE DATOS ---
+        final hechosFiltrados = widget.controlador.hechosActivos.where((hecho) {
+          if (hecho.tipoHecho == 'positivo') return false;
+
+          if (_filtroEstado == 'Activos' && hecho.estado == 'resuelto')
+            return false;
+          if (_filtroEstado == 'Resueltos' && hecho.estado != 'resuelto')
+            return false;
+
+          final diasAntiguedad = DateTime.now()
+              .difference(hecho.creadoEn)
+              .inDays;
+          if (_filtroTiempo == 'Hoy' && diasAntiguedad > 1) return false;
+          if (_filtroTiempo == 'Semana' && diasAntiguedad > 7) return false;
+          if (_filtroTiempo == 'Mes' && diasAntiguedad > 30) return false;
+
+          if (_filtroCategoria != 'Todas') {
+            final categoriaReal = _extraerCategoria(
+              hecho.descripcion ?? '',
+              hecho.tipoHecho,
+            );
+            if (categoriaReal != _filtroCategoria) return false;
+          }
+
+          return true;
+        }).toList();
+
+        // Creamos un Set con los IDs permitidos para filtrar los marcadores del mapa
+        final Set<String> idsFiltrados = hechosFiltrados
+            .map((h) => h.id)
+            .toSet();
+
+        // Extraemos solo los marcadores que superaron el filtro
+        final marcadoresFiltrados = widget.controlador.marcadores
+            .where((m) => idsFiltrados.contains(m.markerId.value))
+            .toSet();
+
+        int filtrosActivosCount = 0;
+        if (_filtroEstado != 'Todos') filtrosActivosCount++;
+        if (_filtroTiempo != 'Siempre') filtrosActivosCount++;
+
+        // Verifica si la tarjeta activa sigue siendo válida tras el filtro
+        final bool mostrarTarjetaSeleccionada =
+            _hechoSeleccionado != null &&
+            idsFiltrados.contains(_hechoSeleccionado!.id);
+
         return Stack(
           children: [
             GoogleMap(
@@ -264,40 +641,162 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
               myLocationEnabled: true,
               myLocationButtonEnabled: false,
               zoomControlsEnabled: false,
-              markers: widget.controlador.marcadores,
+              padding: const EdgeInsets.only(
+                bottom: 110,
+                top: 160,
+              ), // Margen ajustado para la barra de filtros
+              markers:
+                  marcadoresFiltrados, // ¡MAGIA! Pasamos solo los pines filtrados
               onTap: (LatLng posicion) {
-                if (_hechoSeleccionado != null) {
+                if (_hechoSeleccionado != null)
                   setState(() => _hechoSeleccionado = null);
-                }
               },
             ),
 
-            // ELIMINADA LA BARRA DE FILTROS FLOTANTE POR COMPLETO (MVP ULTRA LIMPIO)
+            // --- BARRA FLOTANTE DE FILTROS ---
+            Positioned(
+              top: 100, // Debajo de la AppBar
+              left: 0,
+              right: 0,
+              height: 50,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                itemCount: _categorias.length + 1,
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 12.0),
+                      child: ActionChip(
+                        avatar: Icon(
+                          Icons.tune_rounded,
+                          size: 18,
+                          color: filtrosActivosCount > 0
+                              ? Colors.white
+                              : AppColors.azulPrimario,
+                        ),
+                        label: Text(
+                          filtrosActivosCount > 0
+                              ? 'Filtros ($filtrosActivosCount)'
+                              : 'Filtros',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: filtrosActivosCount > 0
+                                ? Colors.white
+                                : AppColors.azulPrimario,
+                          ),
+                        ),
+                        backgroundColor: filtrosActivosCount > 0
+                            ? AppColors.azulPrimario
+                            : Colors.white.withOpacity(0.9),
+                        side: BorderSide.none,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        elevation: 4,
+                        shadowColor: Colors.black.withOpacity(0.2),
+                        onPressed: _abrirPanelFiltrosAvanzados,
+                      ),
+                    );
+                  }
 
-            // Indicador de carga
+                  final categoria = _categorias[index - 1];
+                  final isSelected = _filtroCategoria == categoria;
+
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8.0),
+                    child: ChoiceChip(
+                      label: Text(
+                        categoria,
+                        style: TextStyle(
+                          fontWeight: isSelected
+                              ? FontWeight.w800
+                              : FontWeight.w600,
+                          color: isSelected
+                              ? Colors.white
+                              : Colors.blueGrey[700],
+                          fontSize: 13,
+                        ),
+                      ),
+                      selected: isSelected,
+                      onSelected: (selected) {
+                        if (selected)
+                          setState(() => _filtroCategoria = categoria);
+                      },
+                      backgroundColor: Colors.white.withOpacity(0.9),
+                      selectedColor: AppColors.azulPrimario,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        side: BorderSide(
+                          color: isSelected
+                              ? AppColors.azulPrimario
+                              : Colors.transparent,
+                          width: 1.5,
+                        ),
+                      ),
+                      elevation: 4,
+                      shadowColor: Colors.black.withOpacity(0.2),
+                    ),
+                  );
+                },
+              ),
+            ),
+
             if (widget.controlador.estaCargando)
-              const Positioned(
-                top: 130, // Subido a la posición original limpia
+              Positioned(
+                top: 170,
                 left: 0,
                 right: 0,
                 child: Center(
-                  child: Card(
-                    shape: CircleBorder(),
-                    child: Padding(
-                      padding: EdgeInsets.all(8.0),
-                      child: CircularProgressIndicator(strokeWidth: 3),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: AppColors.azulPrimario,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Actualizando mapa...',
+                          style: TextStyle(
+                            color: Colors.blueGrey[800],
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
 
-            // LA MINI-TARJETA ANIMADA
+            // Mini-Tarjeta: Se eleva y se oculta dinámicamente si el filtro la excluye
             AnimatedPositioned(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOutCubic,
-              bottom: _hechoSeleccionado != null ? 55 : -150,
+              bottom: mostrarTarjetaSeleccionada ? 120 : -150,
               left: 20,
-              right: 90,
+              right: 20,
               child: _hechoSeleccionado == null
                   ? const SizedBox.shrink()
                   : _buildTarjetaPrevisualizacion(context, _hechoSeleccionado!),
@@ -308,19 +807,22 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
     );
   }
 
-  // Diseño de la Mini-Tarjeta (LIMPIADO)
   Widget _buildTarjetaPrevisualizacion(BuildContext context, HechoModel hecho) {
-    Color colorCategoria;
+    final parseado = _parsearDescripcion(
+      hecho.descripcion ?? '',
+      hecho.tipoHecho,
+    );
+    final categoriaNombre = parseado['categoria']!;
+    final descripcionLimpia = parseado['descripcion']!;
+    final estilosUI = _getEstilosCategoria(categoriaNombre, hecho.tipoHecho);
 
-    if (hecho.estado == 'resuelto') {
-      colorCategoria = Colors.blueGrey;
-    } else {
-      colorCategoria = hecho.tipoHecho == 'problema'
-          ? Colors.red
-          : hecho.tipoHecho == 'alerta'
-          ? Colors.orange
-          : Colors.blue;
-    }
+    final bool esResuelto = hecho.estado == 'resuelto';
+    final Color colorUI = esResuelto
+        ? Colors.green[600]!
+        : estilosUI['color'] as Color;
+    final IconData iconoUI = esResuelto
+        ? Icons.verified_rounded
+        : estilosUI['icono'] as IconData;
 
     return GestureDetector(
       onTap: () {
@@ -329,37 +831,35 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
           MaterialPageRoute(
             builder: (context) => HechoDetalleScreen(
               hecho: hecho,
-              controller:
-                  widget.controlador, // <--- PASAMOS EL CONTROLADOR DEL MAPA
+              controller: widget.controlador,
             ),
           ),
         );
       },
       child: Container(
+        margin: const EdgeInsets.only(bottom: 40),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.grey[100]!, width: 2),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
+              color: colorUI.withOpacity(0.15),
               blurRadius: 20,
-              offset: const Offset(0, 10),
+              offset: const Offset(0, 8),
             ),
           ],
         ),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: colorCategoria.withOpacity(0.15),
+                color: colorUI.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                hecho.estado == 'resuelto' ? Icons.verified : Icons.location_on,
-                color: colorCategoria,
-              ),
+              child: Icon(iconoUI, color: colorUI, size: 24),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -367,19 +867,21 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    hecho.estado == 'resuelto'
-                        ? 'RESUELTO • ${hecho.tipoHecho.toUpperCase()}'
-                        : hecho.tipoHecho.toUpperCase(),
+                    esResuelto
+                        ? 'RESUELTO • ${categoriaNombre.toUpperCase()}'
+                        : categoriaNombre.toUpperCase(),
                     style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 10,
-                      color: colorCategoria,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 11,
+                      color: colorUI,
                       letterSpacing: 0.5,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    hecho.descripcion ?? 'Reporte sin descripción',
+                    descripcionLimpia.isNotEmpty
+                        ? descripcionLimpia
+                        : 'Reporte en la zona',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
@@ -393,13 +895,14 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
             ),
             Container(
               padding: const EdgeInsets.all(8),
+              margin: const EdgeInsets.only(left: 8),
               decoration: BoxDecoration(
-                color: Colors.grey[100],
+                color: Colors.blueGrey[50],
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.arrow_forward_ios,
-                color: Colors.grey,
+              child: Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: Colors.blueGrey[400],
                 size: 14,
               ),
             ),
@@ -410,6 +913,10 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
   }
 }
 
+// ============================================================================
+// VISTAS PLACEHOLDER
+// ============================================================================
+
 class _VistaActividadNotificaciones extends StatelessWidget {
   const _VistaActividadNotificaciones();
   @override
@@ -418,7 +925,7 @@ class _VistaActividadNotificaciones extends StatelessWidget {
       color: AppColors.fondoGeneral,
       child: const Center(
         child: Text(
-          'Actividad y Notificaciones\n(Actualizaciones de tus reportes y medallas)',
+          'Actividad y Notificaciones\n(Actualizaciones de tus reportes)',
           textAlign: TextAlign.center,
         ),
       ),

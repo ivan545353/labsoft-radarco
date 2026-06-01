@@ -15,8 +15,7 @@ class HechosController extends ChangeNotifier {
   String? _mensajeError;
   String? get mensajeError => _mensajeError;
 
-  String _filtroEstadoActual = 'activo';
-  String get filtroEstadoActual => _filtroEstadoActual;
+  // ❌ Se eliminó _filtroEstadoActual porque ahora la UI filtra todo dinámicamente
 
   List<HechoModel> _hechosActivos = [];
   List<HechoModel> get hechosActivos => _hechosActivos;
@@ -24,9 +23,8 @@ class HechosController extends ChangeNotifier {
   Set<Marker> _marcadores = {};
   Set<Marker> get marcadores => _marcadores;
 
-  // Variable para guardar la función de navegación
   Function(HechoModel)? _abrirDetalleCallback;
-  // Método para registrar la función desde la pantalla
+
   void setAbrirDetalleCallback(Function(HechoModel) callback) {
     _abrirDetalleCallback = callback;
   }
@@ -37,12 +35,10 @@ class HechosController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Disparamos la limpieza automática en la base de datos silenciosamente
-      await Supabase.instance.client.rpc('archivar_hechos_caducados');
-
-      // Luego descargamos los hechos
+      // ✅ Solicitamos el historial completo.
+      // Pasamos 'todos' para indicarle al repositorio que no filtre nada.
       _hechosActivos = await _repository.obtenerHechosPorEstado(
-        estado: _filtroEstadoActual,
+        estado: 'todos',
       );
       await _generarMarcadoresPersonalizados();
     } catch (e) {
@@ -53,21 +49,11 @@ class HechosController extends ChangeNotifier {
     }
   }
 
-  // Método para alternar entre Activos e Historial
-  Future<void> cambiarFiltro(String nuevoEstado) async {
-    if (_filtroEstadoActual == nuevoEstado) return;
-
-    _filtroEstadoActual = nuevoEstado;
-    await cargarHechos();
-  }
-
-  // LÓGICA DE UX: Marcadores limpios (Sin hechos positivos para el MVP)
+  // 🚀 LÓGICA DE UX PREMIUM: Marcadores Inteligentes en el Mapa
   Future<void> _generarMarcadoresPersonalizados() async {
     _marcadores.clear();
 
     for (var hecho in _hechosActivos) {
-      // INTERCEPTOR VISUAL: Ignoramos por completo los hechos positivos
-      // Esto cumple con la decisión del MVP sin alterar la BD.
       if (hecho.tipoHecho == 'positivo') continue;
 
       IconData iconMarker;
@@ -75,23 +61,53 @@ class HechosController extends ChangeNotifier {
 
       if (hecho.estado == 'resuelto') {
         iconMarker = Icons.verified_rounded;
-        colorMarker = Colors.blueGrey;
+        colorMarker = Colors.green[600]!; // Verde para casos resueltos
       } else {
-        // Mapeo normal de iconos (eliminada la opción 'positivo')
-        if (hecho.tipoHecho == 'problema') {
-          iconMarker = Icons.warning_rounded;
-          colorMarker = Colors.red;
-        } else if (hecho.tipoHecho == 'alerta') {
-          iconMarker = Icons.error_outline_rounded;
-          colorMarker = Colors.orange;
-        } else {
-          // comunitario / defecto
-          iconMarker = Icons.group_work_rounded;
-          colorMarker = Colors.blue;
+        // Inteligencia de Parseo para pintar el mapa
+        final match = RegExp(
+          r'^\[(.*?)\] - ',
+        ).firstMatch(hecho.descripcion ?? '');
+        final categoria = match != null ? match.group(1) : null;
+
+        switch (categoria) {
+          case 'Bache':
+            iconMarker = Icons.terrain_rounded;
+            colorMarker = Colors.red[500]!;
+            break;
+          case 'Basura':
+            iconMarker = Icons.delete_outline_rounded;
+            colorMarker = Colors.brown[400]!;
+            break;
+          case 'Luminaria':
+            iconMarker = Icons.lightbulb_outline_rounded;
+            colorMarker = Colors.amber[600]!;
+            break;
+          case 'Agua / Caño':
+            iconMarker = Icons.water_drop_outlined;
+            colorMarker = Colors.blue[500]!;
+            break;
+          case 'Accidente':
+            iconMarker = Icons.car_crash_outlined;
+            colorMarker = Colors.deepOrange[500]!;
+            break;
+          case 'Obstrucción':
+            iconMarker = Icons.block_flipped;
+            colorMarker = Colors.orange[500]!;
+            break;
+          case 'Inseguridad':
+            iconMarker = Icons.security_outlined;
+            colorMarker = Colors.purple[400]!;
+            break;
+          default:
+            iconMarker = hecho.tipoHecho == 'alerta'
+                ? Icons.warning_rounded
+                : Icons.report_problem_rounded;
+            colorMarker = hecho.tipoHecho == 'alerta'
+                ? Colors.orange[500]!
+                : Colors.blueGrey[500]!;
         }
       }
 
-      // Descargamos el ícono personalizado asincrónicamente
       final iconDescriptor = await MapMarkerUtils.getBytesFromIcon(
         icon: iconMarker,
         color: colorMarker,
@@ -127,7 +143,6 @@ class HechosController extends ChangeNotifier {
     }
   }
 
-  // Método para enviar validaciones desde la UI
   Future<bool> enviarInteraccion(String hechoId, String tipoInteraccion) async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
@@ -143,11 +158,9 @@ class HechosController extends ChangeNotifier {
           .eq('auth_id', user.id)
           .single();
 
-      final ciudadanoIdReal = usuarioData['id'];
-
       await _repository.registrarInteraccion(
         hechoId: hechoId,
-        ciudadanoId: ciudadanoIdReal,
+        ciudadanoId: usuarioData['id'],
         tipoInteraccion: tipoInteraccion,
       );
       return true;
@@ -158,7 +171,6 @@ class HechosController extends ChangeNotifier {
     }
   }
 
-  // Verificar qué botones deben estar encendidos al abrir la pantalla
   Future<List<String>> cargarMisInteracciones(String hechoId) async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return [];
@@ -179,7 +191,6 @@ class HechosController extends ChangeNotifier {
     }
   }
 
-  // Quitar el Upvote
   Future<bool> quitarInteraccion(String hechoId, String tipoInteraccion) async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return false;
@@ -198,17 +209,14 @@ class HechosController extends ChangeNotifier {
       );
       return true;
     } catch (e) {
-      debugPrint('Error al quitar interacción: $e');
       return false;
     }
   }
 
-  // Puente para obtener los conteos
   Future<Map<String, int>> obtenerConteoInteracciones(String hechoId) async {
     return await _repository.obtenerConteoInteracciones(hechoId);
   }
 
-  // Puente para obtener un único hecho actualizado
   Future<HechoModel?> obtenerHechoPorId(String id) async {
     try {
       return await _repository.obtenerHechoPorId(id);
@@ -235,7 +243,6 @@ class HechosController extends ChangeNotifier {
         debugPrint('Usuario anónimo leyendo comentarios');
       }
     }
-
     return await _repository.obtenerComentarios(hechoId, ciudadanoIdActual);
   }
 
@@ -260,12 +267,10 @@ class HechosController extends ChangeNotifier {
       });
       return true;
     } catch (e) {
-      debugPrint('Error al comentar: $e');
       return false;
     }
   }
 
-  // Gestión de Likes en Comentarios
   Future<bool> alternarLikeComentario(String comentarioId, bool darLike) async {
     try {
       final user = Supabase.instance.client.auth.currentUser;
@@ -276,32 +281,28 @@ class HechosController extends ChangeNotifier {
           .select('id')
           .eq('auth_id', user.id)
           .single();
-      final ciudadanoId = userData['id'];
 
       if (darLike) {
         await Supabase.instance.client.from('comentario_likes').insert({
           'comentario_id': comentarioId,
-          'ciudadano_id': ciudadanoId,
+          'ciudadano_id': userData['id'],
         });
       } else {
         await Supabase.instance.client.from('comentario_likes').delete().match({
           'comentario_id': comentarioId,
-          'ciudadano_id': ciudadanoId,
+          'ciudadano_id': userData['id'],
         });
       }
       return true;
     } catch (e) {
-      debugPrint('Error al procesar el like: $e');
       return false;
     }
   }
 
-  // Gestión de Denuncias
   Future<bool> reportarComentario(String comentarioId, String motivo) async {
     try {
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) return false;
-
       final userData = await Supabase.instance.client
           .from('usuarios')
           .select('id')
@@ -315,12 +316,10 @@ class HechosController extends ChangeNotifier {
       });
       return true;
     } catch (e) {
-      debugPrint('Error al reportar comentario: $e');
       return false;
     }
   }
 
-  // ELIMINAR COMENTARIO
   Future<bool> eliminarComentario(String comentarioId) async {
     try {
       await Supabase.instance.client
@@ -329,7 +328,6 @@ class HechosController extends ChangeNotifier {
           .eq('id', comentarioId);
       return true;
     } catch (e) {
-      debugPrint('Error al eliminar comentario: $e');
       return false;
     }
   }
