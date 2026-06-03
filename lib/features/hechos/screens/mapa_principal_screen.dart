@@ -13,6 +13,8 @@ import 'hecho_detalle_screen.dart';
 import '../models/hecho_model.dart';
 import '../../auth/controllers/usuario_controller.dart';
 import '../../usuarios/screens/perfil_usuario_screen.dart';
+import '../../notificaciones/screens/notificaciones_screen.dart';
+import '../../notificaciones/controllers/notificaciones_controller.dart';
 
 class MapaPrincipalScreen extends StatefulWidget {
   const MapaPrincipalScreen({super.key});
@@ -26,11 +28,14 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
   final AuthController _authController = AuthController();
   final HechosController _hechosController = HechosController();
   final UsuarioController _usuarioController = UsuarioController();
+  final NotificacionesController _notificacionesController =
+      NotificacionesController();
 
   @override
   void dispose() {
     _hechosController.dispose();
     _usuarioController.dispose();
+    _notificacionesController.dispose();
     super.dispose();
   }
 
@@ -50,7 +55,8 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
       _VistaMapaInteractiva(controlador: _hechosController);
   Widget get _vistaComunidad =>
       ComunidadFeedScreen(controlador: _hechosController);
-  Widget get _vistaActividad => const _VistaActividadNotificaciones();
+  Widget get _vistaActividad =>
+      NotificacionesScreen(controller: _notificacionesController);
   Widget get _vistaPerfil => PerfilUsuarioScreen(
     authController: _authController,
     usuarioController: _usuarioController,
@@ -243,6 +249,29 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
   Widget _buildNavItem(int index, IconData icon, String label) {
     final isSelected = _indiceTabActual == index;
 
+    // 1. Construimos el ícono base normal
+    Widget iconWidget = Icon(
+      icon,
+      color: isSelected ? AppColors.azulPrimario : Colors.blueGrey[400],
+      size: 24,
+    );
+
+    // 2. MAGIA: Si es el botón de "Avisos" (índice 2), lo envolvemos con el Badge reactivo
+    if (index == 2) {
+      iconWidget = ListenableBuilder(
+        listenable: _notificacionesController,
+        builder: (context, child) {
+          return Badge(
+            isLabelVisible: _notificacionesController.mostrarPuntoEnDock,
+            backgroundColor: Colors.redAccent, // Color de alerta
+            smallSize: 10, // Tamaño sutil del punto
+            child: child, // Reutiliza el ícono base sin redibujarlo
+          );
+        },
+        child: iconWidget,
+      );
+    }
+
     return GestureDetector(
       onTap: () {
         if (index == 1 || index == 2 || index == 3) {
@@ -268,11 +297,7 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
         ),
         child: Row(
           children: [
-            Icon(
-              icon,
-              color: isSelected ? AppColors.azulPrimario : Colors.blueGrey[400],
-              size: 24,
-            ),
+            iconWidget, // Usamos el ícono modificado en lugar del ícono estático
             if (isSelected) ...[
               const SizedBox(width: 8),
               Text(
@@ -907,42 +932,6 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-// ============================================================================
-// VISTAS PLACEHOLDER
-// ============================================================================
-
-class _VistaActividadNotificaciones extends StatelessWidget {
-  const _VistaActividadNotificaciones();
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.fondoGeneral,
-      child: const Center(
-        child: Text(
-          'Actividad y Notificaciones\n(Actualizaciones de tus reportes)',
-          textAlign: TextAlign.center,
-        ),
-      ),
-    );
-  }
-}
-
-class _VistaPerfilUsuario extends StatelessWidget {
-  const _VistaPerfilUsuario();
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.fondoGeneral,
-      child: const Center(
-        child: Text(
-          'Perfil del Ciudadano\n(Puntos, Medallas y Ajustes)',
-          textAlign: TextAlign.center,
         ),
       ),
     );
