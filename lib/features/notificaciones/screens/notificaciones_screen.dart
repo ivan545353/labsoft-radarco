@@ -2,11 +2,18 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../controllers/notificaciones_controller.dart';
 import '../models/notificacion_model.dart';
+import '../../hechos/controllers/hechos_controller.dart';
+import '../../hechos/screens/hecho_detalle_screen.dart';
 
 class NotificacionesScreen extends StatefulWidget {
   final NotificacionesController controller;
+  final HechosController hechosController;
 
-  const NotificacionesScreen({super.key, required this.controller});
+  const NotificacionesScreen({
+    super.key,
+    required this.controller,
+    required this.hechosController,
+  });
 
   @override
   State<NotificacionesScreen> createState() => _NotificacionesScreenState();
@@ -16,9 +23,6 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
   @override
   void initState() {
     super.initState();
-
-    // Le decimos a Flutter: "Espera a terminar de dibujar esta pantalla por
-    // primera vez, y justo DESPUÉS, pide los datos y apaga el punto del Dock".
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         widget.controller.cargarNotificaciones();
@@ -27,7 +31,154 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
     });
   }
 
-  // --- 1. LÓGICA DE AGRUPACIÓN TEMPORAL ---
+  // --- LÓGICA MAESTRA DE NAVEGACIÓN ---
+  Future<void> _procesarToqueNotificacion(
+    NotificacionModel notificacion, {
+    bool esAccionRapida = false,
+  }) async {
+    // 1. Siempre marcamos como leída al interactuar
+    widget.controller.marcarComoLeida(notificacion.id);
+
+    // 2. Caso Especial: Gamificación (Muestra modal, no navega)
+    if (notificacion.tipo == 'gamificacion') {
+      _mostrarModalLogro(notificacion);
+      return;
+    }
+
+    // 3. Validación de seguridad
+    if (notificacion.referenciaId == null) return;
+
+    // 4. Mostrar overlay de carga visual (Evita toques múltiples)
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: AppColors.azulPrimario),
+      ),
+    );
+
+    // 5. Descargar el reporte completo desde Supabase usando el método que ya tenías
+    final hecho = await widget.hechosController.obtenerHechoPorId(
+      notificacion.referenciaId!,
+    );
+
+    // Quitar overlay de carga
+    if (mounted) Navigator.pop(context);
+
+    // 6. Ejecutar la acción correspondiente
+    if (hecho != null && mounted) {
+      // Navegamos a la pantalla de detalle del reporte
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HechoDetalleScreen(
+            hecho: hecho,
+            controller: widget.hechosController,
+          ),
+        ),
+      );
+
+      // (Nota: Si tuvieras acceso directo al ComentariosSheet desde aquí,
+      // podrías invocarlo cuando 'esAccionRapida' y 'tipo' == 'interaccion' sean verdaderos).
+    } else if (mounted) {
+      // Manejo de errores profesional si el reporte fue borrado
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Este reporte ya no está disponible en la plataforma.'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  // --- MODAL DE CELEBRACIÓN (GAMIFICACIÓN) ---
+  void _mostrarModalLogro(NotificacionModel notificacion) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(32),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(40)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              const SizedBox(height: 32),
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.amber[50],
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.emoji_events_rounded,
+                  size: 64,
+                  color: Colors.amber,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                notificacion.titulo,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.blueGrey[900],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                notificacion.mensaje,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Colors.blueGrey[600],
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber[600],
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    '¡Genial!',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- MÉTODOS AUXILIARES ---
   Map<String, List<NotificacionModel>> _agruparNotificaciones(
     List<NotificacionModel> notificaciones,
   ) {
@@ -36,7 +187,6 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
       'Ayer': [],
       'Anteriores': [],
     };
-
     final hoy = DateTime.now();
     final ayer = hoy.subtract(const Duration(days: 1));
 
@@ -56,14 +206,13 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
     return grupos;
   }
 
-  // --- 2. DICCIONARIO VISUAL Y ACCIONES ---
   Map<String, dynamic> _configuracionPorTipo(String tipo) {
     switch (tipo) {
       case 'consenso':
         return {
           'icono': Icons.check_circle_rounded,
           'color': AppColors.exito,
-          'accionTexto': 'Ver en el mapa',
+          'accionTexto': 'Ver reporte',
           'accionIcono': Icons.map_rounded,
         };
       case 'interaccion':
@@ -77,10 +226,10 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
         return {
           'icono': Icons.military_tech_rounded,
           'color': Colors.amber[600],
-          'accionTexto': 'Ver mis logros',
+          'accionTexto': 'Ver logro',
           'accionIcono': Icons.emoji_events_rounded,
         };
-      default: // 'sistema'
+      default:
         return {
           'icono': Icons.info_rounded,
           'color': Colors.blueGrey[400],
@@ -97,6 +246,7 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
     return '${fecha.day}/${fecha.month}';
   }
 
+  // --- UI BUILDER ---
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -107,20 +257,12 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
         final grupos = _agruparNotificaciones(notificaciones);
 
         return Scaffold(
-          backgroundColor: Colors.white, // Fondo completamente blanco y limpio
+          backgroundColor: Colors.white,
           appBar: AppBar(
             backgroundColor: Colors.white,
             elevation: 0,
-            scrolledUnderElevation: 1, // Sutil sombra al scrollear (Material 3)
-            leading: Navigator.canPop(context)
-                ? IconButton(
-                    icon: const Icon(
-                      Icons.arrow_back_ios_new_rounded,
-                      color: Colors.blueGrey,
-                    ),
-                    onPressed: () => Navigator.pop(context),
-                  )
-                : null,
+            scrolledUnderElevation: 1,
+            automaticallyImplyLeading: false,
             title: Text(
               'Actividad',
               style: TextStyle(
@@ -177,8 +319,6 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
       },
     );
   }
-
-  // --- 3. COMPONENTES VISUALES ---
 
   Widget _buildEstadoVacio() {
     return Center(
@@ -251,21 +391,19 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
             ? AppColors.azulPrimario.withOpacity(0.04)
             : Colors.transparent,
         child: InkWell(
-          onTap: () {
-            widget.controller.marcarComoLeida(notificacion.id);
-            // TODO: Lógica general de navegación al tocar toda la fila
-          },
+          // 📍 ENLAZAMOS EL TOQUE GENERAL (Abre el reporte normalmente)
+          onTap: () =>
+              _procesarToqueNotificacion(notificacion, esAccionRapida: false),
           child: Container(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
             decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(color: Colors.grey[100]!, width: 1),
-              ), // Separador ultra fino
+              ),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Avatar / Icono
                 Stack(
                   children: [
                     CircleAvatar(
@@ -294,8 +432,6 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
                   ],
                 ),
                 const SizedBox(width: 16),
-
-                // Cuerpo conversacional
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -338,28 +474,13 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
                           height: 1.3,
                         ),
                       ),
-
-                      // --- BOTÓN DE ACCIÓN INLINE ---
-                      // --- BOTÓN DE ACCIÓN INLINE ---
                       const SizedBox(height: 8),
                       InkWell(
-                        onTap: () {
-                          // 1. Marcamos como leída
-                          widget.controller.marcarComoLeida(notificacion.id);
-
-                          // 2. Navegamos al detalle del reporte si existe la referencia
-                          if (notificacion.referenciaId != null) {
-                            // Aquí asumo que tu pantalla de detalle se llama HechoDetalleScreen
-                            // Navigator.push(
-                            //   context,
-                            //   MaterialPageRoute(
-                            //     builder: (context) => HechoDetalleScreen(
-                            //       hechoId: notificacion.referenciaId!,
-                            //     ),
-                            //   ),
-                            // );
-                          }
-                        },
+                        // 📍 ENLAZAMOS LA ACCIÓN INLINE
+                        onTap: () => _procesarToqueNotificacion(
+                          notificacion,
+                          esAccionRapida: true,
+                        ),
                         borderRadius: BorderRadius.circular(8),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(

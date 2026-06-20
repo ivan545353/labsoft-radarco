@@ -15,7 +15,6 @@ class UsuarioController extends ChangeNotifier {
   String? _mensajeError;
   String? get mensajeError => _mensajeError;
 
-  // Carga los datos del ciudadano desde la tabla pública 'usuarios'
   Future<void> cargarPerfil() async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
@@ -33,9 +32,13 @@ class UsuarioController extends ChangeNotifier {
     }
   }
 
+  // 🔥 ACTUALIZADO: Recibe los campos visuales
   Future<bool> actualizarPerfil({
     required String alias,
     required String avatarUrl,
+    required String marcoEquipado,
+    required String bannerEquipado,
+    required String colorTema,
   }) async {
     _estaCargando = true;
     _mensajeError = null;
@@ -45,17 +48,19 @@ class UsuarioController extends ChangeNotifier {
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) throw Exception("Sesión no encontrada");
 
-      // Actualizamos en la base de datos
+      // Actualizamos en la base de datos con los nuevos campos
       await Supabase.instance.client
           .from('usuarios')
           .update({
             'alias': alias,
             'avatar_url': avatarUrl,
+            'marco_equipado': marcoEquipado,
+            'banner_equipado': bannerEquipado,
+            'color_tema': colorTema,
             'actualizado_en': DateTime.now().toIso8601String(),
           })
           .eq('auth_id', user.id);
 
-      // Recargamos el perfil local para que la UI se entere
       await cargarPerfil();
       return true;
     } catch (e) {

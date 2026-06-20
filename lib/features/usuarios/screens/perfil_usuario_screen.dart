@@ -6,17 +6,62 @@ import '../../../core/theme/app_colors.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../auth/controllers/usuario_controller.dart';
 import '../../hechos/controllers/hechos_controller.dart';
+import '../../utils/catalogo_recompensas.dart'; // Importar catálogo
 
+// --- MODELO: LOGROS EVOLUTIVOS ---
+class TierLogro {
+  final String titulo;
+  final int meta;
+  final Color colorRango;
+  final IconData icono;
+  TierLogro(this.titulo, this.meta, this.colorRango, this.icono);
+}
+
+class LogroEvolutivo {
+  final String descripcionBasica;
+  final int progresoActual;
+  final List<TierLogro> tiers;
+
+  LogroEvolutivo({
+    required this.descripcionBasica,
+    required this.progresoActual,
+    required this.tiers,
+  });
+
+  int get indiceTierActual {
+    int indice = -1;
+    for (int i = 0; i < tiers.length; i++) {
+      if (progresoActual >= tiers[i].meta) {
+        indice = i;
+      } else {
+        break;
+      }
+    }
+    return indice;
+  }
+
+  TierLogro get tierVisual =>
+      indiceTierActual == -1 ? tiers[0] : tiers[indiceTierActual];
+  TierLogro? get proximoTier =>
+      indiceTierActual + 1 < tiers.length ? tiers[indiceTierActual + 1] : null;
+  bool get estaDesbloqueado => progresoActual >= tiers[0].meta;
+}
+
+// --- PANTALLA ---
 class PerfilUsuarioScreen extends StatefulWidget {
   final AuthController authController;
   final UsuarioController usuarioController;
   final HechosController hechosController;
+  final bool esPerfilPropio;
+  final String? usuarioIdVisualizado;
 
   const PerfilUsuarioScreen({
     super.key,
     required this.authController,
     required this.usuarioController,
     required this.hechosController,
+    this.esPerfilPropio = true,
+    this.usuarioIdVisualizado,
   });
 
   @override
@@ -24,36 +69,114 @@ class PerfilUsuarioScreen extends StatefulWidget {
 }
 
 class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
+  int _totalReportesCreados = 0;
+  int _totalProblemasResueltos = 0;
+  int _totalConfirmaciones = 0;
+  int _totalComentarios = 0;
+
+  final Color _bronce = const Color(0xFFCD7F32);
+  final Color _plata = const Color(0xFF90A4AE);
+  final Color _oro = const Color(0xFFFFB300);
+  final Color _diamante = const Color(0xFF00BCEB);
+
   @override
   void initState() {
     super.initState();
-    widget.usuarioController.cargarPerfil();
+    _cargarDatosDePantalla();
   }
 
-  // --- MOTOR DE GAMIFICACIÓN BÁSICA ---
-  int _calcularNivel(int reputacion) {
-    return (reputacion / 50).floor() + 1;
+  void _cargarDatosDePantalla() {
+    if (widget.esPerfilPropio) {
+      widget.usuarioController.cargarPerfil();
+    }
+    _calcularEstadisticasDelUsuario();
   }
 
-  double _calcularProgreso(int reputacion) {
-    return (reputacion % 50) / 50.0;
+  void _calcularEstadisticasDelUsuario() {
+    final idFiltrar = widget.esPerfilPropio
+        ? widget.usuarioController.perfilActual?.id
+        : widget.usuarioIdVisualizado;
+    if (idFiltrar == null) return;
+
+    int creados = 0;
+    int resueltos = 0;
+
+    for (var hecho in widget.hechosController.hechosActivos) {
+      if (hecho.ciudadanoId == idFiltrar) {
+        creados++;
+        if (hecho.estado == 'resuelto') resueltos++;
+      }
+    }
+    setState(() {
+      _totalReportesCreados = creados;
+      _totalProblemasResueltos = resueltos;
+    });
   }
 
-  int _puntosParaProximoNivel(int reputacion) {
-    return 50 - (reputacion % 50);
+  List<LogroEvolutivo> _generarLogros() {
+    return [
+      LogroEvolutivo(
+        descripcionBasica: 'Reportes creados',
+        progresoActual: _totalReportesCreados,
+        tiers: [
+          TierLogro('Iniciador', 1, _bronce, Icons.flag_outlined),
+          TierLogro('Vigilante', 10, _plata, Icons.remove_red_eye_rounded),
+          TierLogro('Faro Cívico', 50, _oro, Icons.my_location_rounded),
+          TierLogro('Radar Humano', 100, _diamante, Icons.radar_rounded),
+        ],
+      ),
+      LogroEvolutivo(
+        descripcionBasica: 'Confirmaciones',
+        progresoActual: _totalConfirmaciones,
+        tiers: [
+          TierLogro('Voz Activa', 5, _bronce, Icons.how_to_vote_outlined),
+          TierLogro('Validador', 25, _plata, Icons.fact_check_rounded),
+          TierLogro('Auditor', 50, _oro, Icons.rule_rounded),
+          TierLogro('Juez Vecinal', 100, _diamante, Icons.gavel_rounded),
+        ],
+      ),
+      LogroEvolutivo(
+        descripcionBasica: 'Casos cerrados',
+        progresoActual: _totalProblemasResueltos,
+        tiers: [
+          TierLogro('Primer Cierre', 1, _bronce, Icons.handshake_outlined),
+          TierLogro('Solucionador', 10, _plata, Icons.build_circle_rounded),
+          TierLogro('Héroe Local', 50, _oro, Icons.verified_rounded),
+          TierLogro('Gestor Urbano', 100, _diamante, Icons.stars_rounded),
+        ],
+      ),
+      LogroEvolutivo(
+        descripcionBasica: 'Comentarios',
+        progresoActual: _totalComentarios,
+        tiers: [
+          TierLogro(
+            'Vecino Sociable',
+            1,
+            _bronce,
+            Icons.chat_bubble_outline_rounded,
+          ),
+          TierLogro('Debatiente', 10, _plata, Icons.forum_rounded),
+          TierLogro('Comunicador', 50, _oro, Icons.record_voice_over_rounded),
+          TierLogro('Voz del Barrio', 100, _diamante, Icons.campaign_rounded),
+        ],
+      ),
+    ];
   }
 
-  String _obtenerRango(int nivel) {
-    if (nivel >= 10) return 'Héroe de la Ciudad';
-    if (nivel >= 7) return 'Guardián Cívico';
-    if (nivel >= 4) return 'Colaborador Frecuente';
-    if (nivel >= 2) return 'Vecino Observador';
-    return 'Ciudadano Nuevo';
+  int _calcularNivel(int reputacion) => (reputacion / 50).floor() + 1;
+  double _calcularProgreso(int reputacion) => (reputacion % 50) / 50.0;
+  int _puntosFaltantes(int reputacion) => 50 - (reputacion % 50);
+
+  String _obtenerEstatus(int reputacion) {
+    if (reputacion >= 500) return 'Referente de Zona';
+    if (reputacion >= 250) return 'Vecino Confiable';
+    if (reputacion >= 100) return 'Colaborador Frecuente';
+    if (reputacion >= 50) return 'Participante Activo';
+    return 'Nuevo Usuario';
   }
 
   @override
   Widget build(BuildContext context) {
-    // Leemos las áreas seguras del dispositivo (Notch superior y Barra de gestos inferior)
     final double safePaddingTop = MediaQuery.of(context).padding.top;
     final double safePaddingBottom = MediaQuery.of(context).padding.bottom;
 
@@ -63,38 +186,42 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
         final perfil = widget.usuarioController.perfilActual;
         final estaCargando = widget.usuarioController.estaCargando;
 
-        final int reputacion = perfil?.reputacion ?? 0;
-        final int nivel = _calcularNivel(reputacion);
-        final String rango = _obtenerRango(nivel);
-        final double progreso = _calcularProgreso(reputacion);
+        final int puntos = perfil?.reputacion ?? 0;
+        final int nivel = _calcularNivel(puntos);
+        final String estatus = _obtenerEstatus(puntos);
+        final double progreso = _calcularProgreso(puntos);
+        final logrosEvolutivos = _generarLogros();
+
+        // 🔥 OBTENER PERSONALIZACIÓN DEL CATÁLOGO
+        final colorTema = CatalogoRecompensas.getColorTema(
+          perfil?.colorTema ?? 'azul_primario',
+        );
+        final gradienteBanner = CatalogoRecompensas.getGradienteBanner(
+          perfil?.bannerEquipado ?? 'clasico_azul',
+        );
+        final colorMarco = CatalogoRecompensas.getColorMarco(
+          perfil?.marcoEquipado ?? 'ninguno',
+        );
 
         return Scaffold(
           backgroundColor: const Color(0xFFF4F7FB),
           body: estaCargando
-              ? const Center(
-                  child: CircularProgressIndicator(
-                    color: AppColors.azulPrimario,
-                  ),
-                )
+              ? Center(child: CircularProgressIndicator(color: colorTema))
               : CustomScrollView(
+                  physics: const BouncingScrollPhysics(),
                   slivers: [
-                    // --- CABECERA PARALLAX DINÁMICA ---
+                    // --- CABECERA PARALLAX ---
                     SliverToBoxAdapter(
                       child: Stack(
                         clipBehavior: Clip.none,
                         alignment: Alignment.topCenter,
                         children: [
-                          // Fondo de la cabecera (Crece dinámicamente según el notch del celular)
                           Container(
                             height: 200 + safePaddingTop,
                             width: double.infinity,
                             decoration: BoxDecoration(
-                              color: AppColors.azulPrimario,
                               gradient: LinearGradient(
-                                colors: [
-                                  AppColors.azulPrimario,
-                                  AppColors.azulPrimario.withOpacity(0.8),
-                                ],
+                                colors: gradienteBanner,
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
@@ -102,9 +229,21 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                                 bottom: Radius.circular(40),
                               ),
                             ),
+                            child: !widget.esPerfilPropio
+                                ? SafeArea(
+                                    child: Align(
+                                      alignment: Alignment.topLeft,
+                                      child: IconButton(
+                                        icon: const Icon(
+                                          Icons.arrow_back_ios_new_rounded,
+                                          color: Colors.white,
+                                        ),
+                                        onPressed: () => Navigator.pop(context),
+                                      ),
+                                    ),
+                                  )
+                                : null,
                           ),
-
-                          // Tarjeta de Perfil Flotante (Se empuja hacia abajo respetando la barra superior)
                           Container(
                             margin: EdgeInsets.only(
                               top: 120 + safePaddingTop,
@@ -140,13 +279,13 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                                     vertical: 4,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: AppColors.exito.withOpacity(0.1),
+                                    color: colorTema.withOpacity(0.1),
                                     borderRadius: BorderRadius.circular(100),
                                   ),
                                   child: Text(
-                                    rango.toUpperCase(),
-                                    style: const TextStyle(
-                                      color: AppColors.exito,
+                                    estatus.toUpperCase(),
+                                    style: TextStyle(
+                                      color: colorTema,
                                       fontWeight: FontWeight.w900,
                                       fontSize: 10,
                                       letterSpacing: 1.0,
@@ -154,8 +293,6 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 24),
-
-                                // BARRA DE PROGRESO DE NIVEL
                                 Row(
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
@@ -185,15 +322,14 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                                     value: progreso,
                                     minHeight: 10,
                                     backgroundColor: Colors.blueGrey[50],
-                                    valueColor:
-                                        const AlwaysStoppedAnimation<Color>(
-                                          AppColors.azulPrimario,
-                                        ),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      colorTema,
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'Faltan ${_puntosParaProximoNivel(reputacion)} puntos para subir de nivel',
+                                  'Faltan ${_puntosFaltantes(puntos)} puntos para subir de nivel',
                                   style: TextStyle(
                                     color: Colors.blueGrey[400],
                                     fontSize: 12,
@@ -204,14 +340,28 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                             ),
                           ),
 
-                          // Avatar Flotante (Se ancla perfectamente entre las dos capas)
+                          // 🔥 AVATAR CON MARCO DINÁMICO
                           Positioned(
                             top: 70 + safePaddingTop,
                             child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
+                              padding: EdgeInsets.all(
+                                perfil?.marcoEquipado != 'ninguno' ? 6 : 4,
+                              ),
+                              decoration: BoxDecoration(
                                 color: Colors.white,
                                 shape: BoxShape.circle,
+                                border: perfil?.marcoEquipado != 'ninguno'
+                                    ? Border.all(color: colorMarco, width: 4)
+                                    : null,
+                                boxShadow: perfil?.marcoEquipado != 'ninguno'
+                                    ? [
+                                        BoxShadow(
+                                          color: colorMarco.withOpacity(0.3),
+                                          blurRadius: 15,
+                                          offset: const Offset(0, 5),
+                                        ),
+                                      ]
+                                    : [],
                               ),
                               child: CircleAvatar(
                                 radius: 46,
@@ -219,15 +369,15 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                                 backgroundImage:
                                     perfil?.avatarUrl != null &&
                                         perfil!.avatarUrl!.isNotEmpty
-                                    ? NetworkImage(perfil!.avatarUrl!)
+                                    ? NetworkImage(perfil.avatarUrl!)
                                     : null,
                                 child:
                                     perfil?.avatarUrl == null ||
                                         perfil!.avatarUrl!.isEmpty
-                                    ? const Icon(
+                                    ? Icon(
                                         Icons.person_rounded,
                                         size: 40,
-                                        color: AppColors.azulPrimario,
+                                        color: colorTema,
                                       )
                                     : null,
                               ),
@@ -237,7 +387,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                       ),
                     ),
 
-                    // --- ESTADÍSTICAS RÁPIDAS ---
+                    // --- MÉTRICAS CONCRETAS ---
                     SliverPadding(
                       padding: const EdgeInsets.only(
                         top: 24,
@@ -248,202 +398,174 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                         child: Row(
                           children: [
                             _buildStatCard(
-                              'Reputación',
-                              '$reputacion',
+                              'Puntos Totales',
+                              '$puntos',
                               Icons.stars_rounded,
-                              Colors.amber[600]!,
+                              colorTema,
                             ),
                             const SizedBox(width: 16),
                             _buildStatCard(
-                              'Aportes',
-                              '12',
-                              Icons.map_rounded,
-                              AppColors.azulPrimario,
-                            ), // Mock
+                              'Problemas Resueltos',
+                              '$_totalProblemasResueltos',
+                              Icons.check_circle_rounded,
+                              AppColors.exito,
+                            ),
                           ],
                         ),
                       ),
                     ),
 
-                    // --- VITRINA DE MEDALLAS ---
+                    // --- CUADRÍCULA EVOLUTIVA ---
                     SliverPadding(
-                      padding: const EdgeInsets.only(top: 32, bottom: 16),
+                      padding: const EdgeInsets.only(
+                        top: 32,
+                        left: 24,
+                        right: 24,
+                        bottom: 16,
+                      ),
                       sliver: SliverToBoxAdapter(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                              ),
-                              child: Text(
-                                'Tus Logros',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w900,
-                                  color: Colors.blueGrey[900],
-                                ),
+                        child: Text(
+                          widget.esPerfilPropio
+                              ? 'Evolución de Logros'
+                              : 'Logros Obtenidos',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.blueGrey[900],
+                          ),
+                        ),
+                      ),
+                    ),
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      sliver: SliverGrid(
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 16,
+                              mainAxisSpacing: 16,
+                              childAspectRatio: 0.95,
+                            ),
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) =>
+                              _buildMedallaEvolutiva(logrosEvolutivos[index]),
+                          childCount: logrosEvolutivos.length,
+                        ),
+                      ),
+                    ),
+
+                    // --- ZONA PRIVADA ---
+                    if (widget.esPerfilPropio)
+                      SliverPadding(
+                        padding: EdgeInsets.only(
+                          top: 32,
+                          left: 24,
+                          right: 24,
+                          bottom: 120 + safePaddingBottom,
+                        ),
+                        sliver: SliverList(
+                          delegate: SliverChildListDelegate([
+                            Text(
+                              'Ajustes Privados',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.blueGrey[400],
+                                letterSpacing: 1.0,
                               ),
                             ),
                             const SizedBox(height: 16),
-                            SizedBox(
-                              height: 110,
-                              child: ListView(
-                                scrollDirection: Axis.horizontal,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                ),
-                                children: [
-                                  _buildMedalla(
-                                    'Primer Paso',
-                                    'Reporte creado',
-                                    Icons.flag_rounded,
-                                    Colors.orange,
-                                    true,
-                                  ),
-                                  _buildMedalla(
-                                    'Voz Confiable',
-                                    '10 confirmaciones',
-                                    Icons.campaign_rounded,
-                                    Colors.blue,
-                                    false,
-                                  ),
-                                  _buildMedalla(
-                                    'Solucionador',
-                                    'Caso cerrado',
-                                    Icons.handshake_rounded,
-                                    Colors.green,
-                                    false,
-                                  ),
-                                  _buildMedalla(
-                                    'Ojo de Halcón',
-                                    '5 baches',
-                                    Icons.remove_red_eye_rounded,
-                                    Colors.purple,
-                                    false,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    // --- OPCIONES Y AJUSTES ---
-                    SliverPadding(
-                      // Se agrega el padding inferior + 100px para evitar el Smart Dock
-                      padding: EdgeInsets.only(
-                        top: 16,
-                        left: 24,
-                        right: 24,
-                        bottom: 120 + safePaddingBottom,
-                      ),
-                      sliver: SliverList(
-                        delegate: SliverChildListDelegate([
-                          Text(
-                            'Ajustes',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.blueGrey[400],
-                              letterSpacing: 1.0,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          _buildMenuOption(
-                            Icons.edit_rounded,
-                            'Editar mi perfil',
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => EditarPerfilScreen(
-                                    usuarioController: widget.usuarioController,
-                                    hechosController: widget
-                                        .hechosController, // 🔥 SE LO PASAMOS A LA OTRA PANTALLA
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                          // ELIMINADA la opción de Notificaciones por redundancia con el Dock
-                          _buildMenuOption(
-                            Icons.security_rounded,
-                            'Privacidad y Datos',
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => PrivacidadDatosScreen(
-                                    authController: widget
-                                        .authController, // 🔥 PASAMOS EL CONTROLADOR
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                          _buildMenuOption(
-                            Icons.help_outline_rounded,
-                            'Ayuda y Soporte',
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      const AyudaSoporteScreen(),
-                                ),
-                              );
-                            },
-                          ),
-
-                          const SizedBox(height: 32),
-
-                          // BOTÓN CERRAR SESIÓN ESTILO "GHOST"
-                          InkWell(
-                            onTap: () => widget.authController.cerrarSesion(),
-                            borderRadius: BorderRadius.circular(16),
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              decoration: BoxDecoration(
-                                color: Colors.red[50],
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: Colors.red[100]!),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.logout_rounded,
-                                    color: Colors.red[700],
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Cerrar Sesión',
-                                    style: TextStyle(
-                                      color: Colors.red[700],
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 16,
+                            _buildMenuOption(
+                              Icons.edit_rounded,
+                              'Editar mis datos',
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => EditarPerfilScreen(
+                                      usuarioController:
+                                          widget.usuarioController,
+                                      hechosController: widget.hechosController,
                                     ),
                                   ),
-                                ],
+                                );
+                              },
+                            ),
+                            _buildMenuOption(
+                              Icons.security_rounded,
+                              'Privacidad de la cuenta',
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => PrivacidadDatosScreen(
+                                      authController: widget.authController,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                            _buildMenuOption(
+                              Icons.help_outline_rounded,
+                              'Contactar soporte',
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const AyudaSoporteScreen(),
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 32),
+                            InkWell(
+                              onTap: () => widget.authController.cerrarSesion(),
+                              borderRadius: BorderRadius.circular(16),
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.red[50],
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: Colors.red[100]!),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.logout_rounded,
+                                      color: Colors.red[700],
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Cerrar Sesión',
+                                      style: TextStyle(
+                                        color: Colors.red[700],
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                        ]),
+                          ]),
+                        ),
+                      )
+                    else
+                      SliverToBoxAdapter(
+                        child: SizedBox(height: 120 + safePaddingBottom),
                       ),
-                    ),
                   ],
                 ),
         );
       },
     );
   }
-
-  // --- WIDGETS AUXILIARES ---
 
   Widget _buildStatCard(
     String label,
@@ -499,29 +621,40 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
     );
   }
 
-  Widget _buildMedalla(
-    String titulo,
-    String subtitulo,
-    IconData icono,
-    MaterialColor color,
-    bool desbloqueada,
-  ) {
+  Widget _buildMedallaEvolutiva(LogroEvolutivo logro) {
+    final estaDesbloqueado = logro.estaDesbloqueado;
+    final tierVisual = logro.tierVisual;
+    final proximo = logro.proximoTier;
+
+    final colorFondo = estaDesbloqueado ? Colors.white : Colors.grey[100];
+    final colorBorde = estaDesbloqueado
+        ? tierVisual.colorRango.withOpacity(0.4)
+        : Colors.transparent;
+    final colorIcono = estaDesbloqueado
+        ? tierVisual.colorRango
+        : Colors.grey[400];
+    final colorTitulo = estaDesbloqueado
+        ? Colors.blueGrey[900]
+        : Colors.grey[500];
+
+    final int metaActual = proximo?.meta ?? tierVisual.meta;
+    final double porcentaje = (logro.progresoActual / metaActual).clamp(
+      0.0,
+      1.0,
+    );
+
     return Container(
-      width: 110,
-      margin: const EdgeInsets.only(right: 12),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: desbloqueada ? Colors.white : Colors.blueGrey[50],
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: desbloqueada ? color[100]! : Colors.transparent,
-        ),
-        boxShadow: desbloqueada
+        color: colorFondo,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: colorBorde, width: 2),
+        boxShadow: estaDesbloqueado
             ? [
                 BoxShadow(
-                  color: color.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
+                  color: tierVisual.colorRango.withOpacity(0.12),
+                  blurRadius: 15,
+                  offset: const Offset(0, 6),
                 ),
               ]
             : [],
@@ -529,32 +662,64 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            icono,
-            size: 32,
-            color: desbloqueada ? color[500] : Colors.blueGrey[200],
-          ),
-          const SizedBox(height: 8),
+          Icon(tierVisual.icono, size: 36, color: colorIcono),
+          const SizedBox(height: 12),
           Text(
-            titulo,
+            estaDesbloqueado ? tierVisual.titulo : 'Bloqueado',
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              color: desbloqueada ? Colors.blueGrey[900] : Colors.blueGrey[400],
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+              color: colorTitulo,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
+          const SizedBox(height: 2),
           Text(
-            subtitulo,
+            logro.descripcionBasica,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 9,
+              fontSize: 11,
               fontWeight: FontWeight.bold,
-              color: Colors.blueGrey[300],
+              color: Colors.blueGrey[400],
             ),
             maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const Spacer(),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${logro.progresoActual}',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  color: colorIcono,
+                ),
+              ),
+              Text(
+                proximo != null ? '${proximo.meta}' : 'MAX',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blueGrey[300],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: porcentaje,
+              minHeight: 8,
+              backgroundColor: estaDesbloqueado
+                  ? tierVisual.colorRango.withOpacity(0.15)
+                  : Colors.grey[300],
+              valueColor: AlwaysStoppedAnimation<Color>(colorIcono!),
+            ),
           ),
         ],
       ),
@@ -562,7 +727,6 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
   }
 
   Widget _buildMenuOption(IconData icon, String label, {VoidCallback? onTap}) {
-    // <-- Agregado {VoidCallback? onTap}
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -599,7 +763,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
           color: Colors.blueGrey[300],
           size: 14,
         ),
-        onTap: onTap, // 🔥 CONECTAMOS LA ACCIÓN
+        onTap: onTap,
       ),
     );
   }

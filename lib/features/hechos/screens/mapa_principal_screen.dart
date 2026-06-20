@@ -55,8 +55,10 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
       _VistaMapaInteractiva(controlador: _hechosController);
   Widget get _vistaComunidad =>
       ComunidadFeedScreen(controlador: _hechosController);
-  Widget get _vistaActividad =>
-      NotificacionesScreen(controller: _notificacionesController);
+  Widget get _vistaActividad => NotificacionesScreen(
+    controller: _notificacionesController,
+    hechosController: _hechosController,
+  );
   Widget get _vistaPerfil => PerfilUsuarioScreen(
     authController: _authController,
     usuarioController: _usuarioController,

@@ -44,18 +44,22 @@ class AuthRepository {
     final String? authId = response.user?.id;
 
     if (authId != null) {
-      // B. Si el registro fue exitoso, creamos su perfil en nuestra tabla 'usuarios'
-      // Por defecto, todo el que se registra desde la app es 'ciudadano'
+      // B. Si el registro fue exitoso, creamos su perfil inicial
+      // 🔥 ACTUALIZADO: Pasamos la reputación en 0 y las personalizaciones por defecto
       final nuevoUsuario = UsuarioModel(
-        id: '', // Se genera en la BD
+        id: '', // Se genera automáticamente en la BD
         authId: authId,
         rol: 'ciudadano',
         alias: alias,
-        creadoEn: DateTime.now(), // Se sobreescribe en la BD
+        reputacion: 0,
+        marcoEquipado: 'ninguno',
+        bannerEquipado: 'clasico_azul',
+        colorTema: 'azul_primario',
       );
 
       // SOLUCIÓN AL CLON DE CUENTAS: Usamos upsert en lugar de insert
-      // Si el Trigger ya creó la fila "Vecino_...", el upsert la actualizará con el alias real.
+      // Si el Trigger ya creó la fila "Vecino_...", el upsert la actualizará con el alias real
+      // y con sus parámetros de personalización.
       await _supabase
           .from('usuarios')
           .upsert(
@@ -96,7 +100,7 @@ class AuthRepository {
     await _supabase.auth.resetPasswordForEmail(email);
   }
 
-  // --- NUEVO: Inicio de Sesión / Registro con Google ---
+  // 6. Inicio de Sesión / Registro con Google
   Future<bool> iniciarSesionConGoogle() async {
     return await _supabase.auth.signInWithOAuth(
       OAuthProvider.google,

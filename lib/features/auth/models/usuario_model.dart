@@ -4,41 +4,54 @@ class UsuarioModel {
   final String rol;
   final String alias;
   final int reputacion;
-  final DateTime creadoEn;
+  final String? nombre;
   final String? avatarUrl;
+
+  // 🔥 NUEVOS CAMPOS DE PERSONALIZACIÓN
+  final String marcoEquipado;
+  final String bannerEquipado;
+  final String? tituloDestacado;
+  final String colorTema;
 
   UsuarioModel({
     required this.id,
     required this.authId,
     required this.rol,
     required this.alias,
-    this.reputacion = 0,
-    required this.creadoEn,
+    required this.reputacion,
+    this.nombre,
     this.avatarUrl,
+    this.marcoEquipado = 'ninguno',
+    this.bannerEquipado = 'clasico_azul',
+    this.tituloDestacado,
+    this.colorTema = 'azul_primario',
   });
 
-  // Este método (Equivalente a un "Mapper") convierte el JSON de Supabase en un Objeto Dart
   factory UsuarioModel.fromJson(Map<String, dynamic> json) {
     return UsuarioModel(
-      id: json['id'] as String,
-      authId: json['auth_id'] as String,
-      rol: json['rol'] as String,
-      alias: json['alias'] as String,
-      reputacion: json['reputacion'] as int? ?? 0,
-      creadoEn: DateTime.parse(json['creado_en'] as String),
-      avatarUrl: json['avatar_url'] as String?,
+      id: json['id'],
+      authId: json['auth_id'],
+      rol: json['rol'],
+      alias: json['alias'],
+      reputacion: json['reputacion'] ?? 0,
+      nombre: json['nombre'],
+      avatarUrl: json['avatar_url'],
+      marcoEquipado: json['marco_equipado'] ?? 'ninguno',
+      bannerEquipado: json['banner_equipado'] ?? 'clasico_azul',
+      tituloDestacado: json['titulo_destacado'],
+      colorTema: json['color_tema'] ?? 'azul_primario',
     );
   }
 
-  // Este método hace lo inverso: convierte el Objeto Dart a JSON para mandarlo a la BD
   Map<String, dynamic> toJson() {
     return {
-      // Nota: No enviamos 'id' ni 'creado_en' porque la base de datos los genera automáticamente
-      'auth_id': authId,
-      'rol': rol,
       'alias': alias,
-      'reputacion': reputacion,
+      'nombre': nombre,
       'avatar_url': avatarUrl,
+      'marco_equipado': marcoEquipado,
+      'banner_equipado': bannerEquipado,
+      'titulo_destacado': tituloDestacado,
+      'color_tema': colorTema,
     };
   }
 }

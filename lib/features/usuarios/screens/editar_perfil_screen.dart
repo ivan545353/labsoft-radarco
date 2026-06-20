@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/controllers/usuario_controller.dart';
 import '../../hechos/controllers/hechos_controller.dart';
+import '../../../features/utils/catalogo_recompensas.dart'; // Importamos el catálogo
 
 class EditarPerfilScreen extends StatefulWidget {
   final UsuarioController usuarioController;
@@ -20,9 +21,15 @@ class EditarPerfilScreen extends StatefulWidget {
 class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
   late TextEditingController _aliasController;
   late String _avatarSeleccionado;
+
+  // 🔥 Nuevas variables de estado visual
+  late String _marcoSeleccionado;
+  late String _bannerSeleccionado;
+  late String _temaSeleccionado;
+  late int _reputacion;
+
   bool _guardando = false;
 
-  // Catálogo de Avatares generados dinámicamente con DiceBear (Estilo 'bottts' o 'avataaars')
   final List<String> _catalogoAvatares = [
     'https://api.dicebear.com/7.x/bottts/png?seed=Felix&backgroundColor=b6e3f4',
     'https://api.dicebear.com/7.x/bottts/png?seed=Aneka&backgroundColor=c0aede',
@@ -39,12 +46,14 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
     super.initState();
     final perfil = widget.usuarioController.perfilActual;
 
+    _reputacion = perfil?.reputacion ?? 0;
     _aliasController = TextEditingController(text: perfil?.alias ?? '');
+    _marcoSeleccionado = perfil?.marcoEquipado ?? 'ninguno';
+    _bannerSeleccionado = perfil?.bannerEquipado ?? 'clasico_azul';
+    _temaSeleccionado = perfil?.colorTema ?? 'azul_primario';
 
-    // Si ya tiene un avatar, lo marcamos. Si no, seleccionamos el primero por defecto.
     if (perfil?.avatarUrl != null && perfil!.avatarUrl!.isNotEmpty) {
       _avatarSeleccionado = perfil.avatarUrl!;
-      // Si el avatar actual no está en el catálogo (ej: si antes subió foto), lo añadimos a la lista
       if (!_catalogoAvatares.contains(_avatarSeleccionado)) {
         _catalogoAvatares.insert(0, _avatarSeleccionado);
       }
@@ -61,18 +70,7 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
 
   Future<void> _guardarCambios() async {
     final nuevoAlias = _aliasController.text.trim();
-
-    if (nuevoAlias.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('El alias no puede estar vacío'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    if (nuevoAlias.length < 3) {
+    if (nuevoAlias.isEmpty || nuevoAlias.length < 3) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('El alias debe tener al menos 3 caracteres'),
@@ -84,23 +82,24 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
 
     setState(() => _guardando = true);
 
-    // Asumimos que agregarás este método a tu UsuarioController en el siguiente paso
+    // 🔥 Enviamos todas las personalizaciones
     final exito = await widget.usuarioController.actualizarPerfil(
       alias: nuevoAlias,
       avatarUrl: _avatarSeleccionado,
+      marcoEquipado: _marcoSeleccionado,
+      bannerEquipado: _bannerSeleccionado,
+      colorTema: _temaSeleccionado,
     );
 
     if (!mounted) return;
-
     setState(() => _guardando = false);
 
     if (exito) {
       widget.hechosController.cargarHechos();
-
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('¡Perfil actualizado con éxito!'),
+          content: Text('¡Perfil personalizado con éxito!'),
           backgroundColor: AppColors.exito,
           behavior: SnackBarBehavior.floating,
         ),
@@ -113,7 +112,6 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
                 'Error al actualizar el perfil',
           ),
           backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
         ),
       );
     }
@@ -123,6 +121,9 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final safePaddingBottom = MediaQuery.of(context).padding.bottom;
+    final colorPrimarioActual = CatalogoRecompensas.getColorTema(
+      _temaSeleccionado,
+    ); // Previsualización en tiempo real
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB),
@@ -145,8 +146,6 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
         ),
         centerTitle: true,
       ),
-
-      // BARRA INFERIOR DE GUARDADO (Sticky y protegida del teclado)
       bottomNavigationBar: Container(
         padding: EdgeInsets.fromLTRB(
           24,
@@ -169,13 +168,13 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
         child: ElevatedButton(
           onPressed: _guardando ? null : _guardarCambios,
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.azulPrimario,
+            backgroundColor: colorPrimarioActual,
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
             elevation: 4,
-            shadowColor: AppColors.azulPrimario.withOpacity(0.4),
+            shadowColor: colorPrimarioActual.withOpacity(0.4),
           ),
           child: _guardando
               ? const SizedBox(
@@ -197,38 +196,32 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
                 ),
         ),
       ),
-
       body: GestureDetector(
-        onTap: () =>
-            FocusScope.of(context).unfocus(), // Ocultar teclado al tocar fuera
+        onTap: () => FocusScope.of(context).unfocus(),
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. SECCIÓN DE AVATAR
-              Text(
-                'Tu Avatar',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.blueGrey[400],
-                  letterSpacing: 1.0,
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Vista Previa Central
+              // 1. SECCIÓN DE AVATAR (Con previsualización de Marco)
+              _buildSectionTitle('Tu Identidad'),
               Center(
                 child: Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: EdgeInsets.all(
+                    _marcoSeleccionado != 'ninguno' ? 6 : 0,
+                  ),
                   decoration: BoxDecoration(
-                    color: Colors.white,
                     shape: BoxShape.circle,
+                    border: Border.all(
+                      color: CatalogoRecompensas.getColorMarco(
+                        _marcoSeleccionado,
+                      ),
+                      width: _marcoSeleccionado != 'ninguno' ? 4 : 0,
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.azulPrimario.withOpacity(0.2),
+                        color: colorPrimarioActual.withOpacity(0.2),
                         blurRadius: 30,
                         offset: const Offset(0, 10),
                       ),
@@ -241,9 +234,8 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
 
-              // Grilla de Selección de Avatares
               GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
@@ -256,7 +248,6 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
                 itemBuilder: (context, index) {
                   final avatarUrl = _catalogoAvatares[index];
                   final isSelected = _avatarSeleccionado == avatarUrl;
-
                   return GestureDetector(
                     onTap: () =>
                         setState(() => _avatarSeleccionado = avatarUrl),
@@ -266,21 +257,10 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: isSelected
-                              ? AppColors.azulPrimario
+                              ? colorPrimarioActual
                               : Colors.transparent,
                           width: 3,
                         ),
-                        boxShadow: isSelected
-                            ? [
-                                BoxShadow(
-                                  color: AppColors.azulPrimario.withOpacity(
-                                    0.3,
-                                  ),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ]
-                            : [],
                       ),
                       child: Padding(
                         padding: const EdgeInsets.all(2.0),
@@ -293,21 +273,10 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
                   );
                 },
               ),
-
-              const SizedBox(height: 40),
+              const SizedBox(height: 32),
 
               // 2. SECCIÓN DE ALIAS
-              Text(
-                'Alias en la comunidad',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.blueGrey[400],
-                  letterSpacing: 1.0,
-                ),
-              ),
-              const SizedBox(height: 16),
-
+              _buildSectionTitle('Alias en la comunidad'),
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -333,9 +302,9 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
                       color: Colors.grey[400],
                       fontWeight: FontWeight.normal,
                     ),
-                    prefixIcon: const Icon(
+                    prefixIcon: Icon(
                       Icons.alternate_email_rounded,
-                      color: AppColors.azulPrimario,
+                      color: colorPrimarioActual,
                     ),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
@@ -345,18 +314,152 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Este nombre será visible en todos tus reportes y comentarios.',
-                style: TextStyle(color: Colors.blueGrey[400], fontSize: 12),
+              const SizedBox(height: 32),
+
+              // 🔥 3. VITRINA DE PERSONALIZACIÓN
+              _buildSectionTitle('Fondo del Perfil (Banner)'),
+              _buildSelectorHorizontal(
+                items: CatalogoRecompensas.banners,
+                seleccionadoId: _bannerSeleccionado,
+                onSeleccionar: (id) => setState(() => _bannerSeleccionado = id),
+                buildItem: (recompensa, isSelected) => Container(
+                  width: 100,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    gradient: LinearGradient(colors: recompensa.valorVisual),
+                    border: isSelected
+                        ? Border.all(color: Colors.white, width: 3)
+                        : null,
+                  ),
+                ),
               ),
 
-              const SizedBox(
-                height: 40,
-              ), // Espacio extra para que el teclado no tape
+              const SizedBox(height: 24),
+              _buildSectionTitle('Tema de Color (Botones e Íconos)'),
+              _buildSelectorHorizontal(
+                items: CatalogoRecompensas.temas,
+                seleccionadoId: _temaSeleccionado,
+                onSeleccionar: (id) => setState(() => _temaSeleccionado = id),
+                buildItem: (recompensa, isSelected) => Container(
+                  width: 60,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: recompensa.valorVisual,
+                    border: isSelected
+                        ? Border.all(color: Colors.blueGrey[900]!, width: 3)
+                        : null,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+              _buildSectionTitle('Marco del Avatar'),
+              _buildSelectorHorizontal(
+                items: CatalogoRecompensas.marcos,
+                seleccionadoId: _marcoSeleccionado,
+                onSeleccionar: (id) => setState(() => _marcoSeleccionado = id),
+                buildItem: (recompensa, isSelected) => Container(
+                  width: 60,
+                  decoration: BoxDecoration(
+                    shape: recompensa.id == 'hexagono_oro'
+                        ? BoxShape.rectangle
+                        : BoxShape.circle,
+                    borderRadius: recompensa.id == 'hexagono_oro'
+                        ? BorderRadius.circular(12)
+                        : null,
+                    border: Border.all(
+                      color: recompensa.id == 'ninguno'
+                          ? Colors.grey[300]!
+                          : recompensa.valorVisual,
+                      width: 4,
+                    ),
+                    color: isSelected
+                        ? Colors.blueGrey[50]
+                        : Colors.transparent,
+                  ),
+                  child: recompensa.id == 'ninguno'
+                      ? Icon(Icons.block, color: Colors.grey[400])
+                      : null,
+                ),
+              ),
+
+              const SizedBox(height: 60), // Margen para teclado
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w800,
+          color: Colors.blueGrey[400],
+          letterSpacing: 1.0,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelectorHorizontal({
+    required List<Recompensa> items,
+    required String seleccionadoId,
+    required Function(String) onSeleccionar,
+    required Widget Function(Recompensa, bool) buildItem,
+  }) {
+    return SizedBox(
+      height: 80,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: items.length,
+        itemBuilder: (context, index) {
+          final recompensa = items[index];
+          final estaDesbloqueada = recompensa.estaDesbloqueada(_reputacion);
+          final isSelected = seleccionadoId == recompensa.id;
+
+          return GestureDetector(
+            onTap: estaDesbloqueada
+                ? () => onSeleccionar(recompensa.id)
+                : () => ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Necesitas ${recompensa.puntosRequeridos} puntos para desbloquear esto',
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  ),
+            child: Container(
+              margin: const EdgeInsets.only(right: 16),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Opacity(
+                    opacity: estaDesbloqueada ? 1.0 : 0.3,
+                    child: buildItem(recompensa, isSelected),
+                  ),
+                  if (!estaDesbloqueada)
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Colors.black54,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.lock_rounded,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

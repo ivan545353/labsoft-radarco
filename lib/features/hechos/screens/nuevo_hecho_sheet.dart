@@ -369,7 +369,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         const Text(
           '¿Qué quieres reportar?',
           style: TextStyle(
-            fontSize: 22,
+            fontSize: 28,
             fontWeight: FontWeight.w900,
             color: Color(0xFF1D1E20),
           ),
@@ -377,7 +377,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         const SizedBox(height: 6),
         Text(
           'Selecciona la categoría que mejor describa el problema.',
-          style: TextStyle(color: Colors.blueGrey[400], fontSize: 14),
+          style: TextStyle(color: Colors.blueGrey[400], fontSize: 22),
         ),
         const SizedBox(height: 24),
         Expanded(
@@ -441,7 +441,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
                       Text(
                         cat.nombre,
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 16,
                           fontWeight: seleccionado
                               ? FontWeight.bold
                               : FontWeight.w600,
@@ -468,7 +468,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         const Text(
           'Agrega los detalles',
           style: TextStyle(
-            fontSize: 22,
+            fontSize: 28,
             fontWeight: FontWeight.w900,
             color: Color(0xFF1D1E20),
           ),
@@ -476,7 +476,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         const SizedBox(height: 6),
         Text(
           'Brinda información clara para que los demás vecinos lo ubiquen rápidamente.',
-          style: TextStyle(color: Colors.blueGrey[400], fontSize: 14),
+          style: TextStyle(color: Colors.blueGrey[400], fontSize: 22),
         ),
         const SizedBox(height: 24),
         Container(
@@ -496,7 +496,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
                   'Ej: Pozo profundo en la esquina de la plaza principal. Hay que esquivarlo con cuidado...',
               hintStyle: TextStyle(
                 color: Colors.grey[400],
-                fontSize: 15,
+                fontSize: 18,
                 height: 1.5,
               ),
               contentPadding: const EdgeInsets.all(20),
@@ -515,7 +515,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         const Text(
           'Evidencia visual',
           style: TextStyle(
-            fontSize: 22,
+            fontSize: 28,
             fontWeight: FontWeight.w900,
             color: Color(0xFF1D1E20),
           ),
@@ -523,7 +523,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         const SizedBox(height: 6),
         Text(
           'Una imagen vale más que mil palabras. Asegúrate de mostrar claramente el reporte.',
-          style: TextStyle(color: Colors.blueGrey[400], fontSize: 14),
+          style: TextStyle(color: Colors.blueGrey[400], fontSize: 22),
         ),
         const SizedBox(height: 24),
 
