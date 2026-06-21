@@ -362,10 +362,11 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
       setState(() => _hechoSeleccionado = hechoTocado);
     });
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (widget.controlador.hechosActivos.isEmpty) {
-        widget.controlador.cargarHechos();
+        await widget.controlador.cargarHechos();
       }
+      await widget.controlador.verificarHechosCercanos();
     });
   }
 

@@ -13,6 +13,11 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../core/utils/geofence_caleta_olivia.dart';
 import 'hecho_detalle_screen.dart';
+import 'dart:convert';
+
+// Kill switch para no gastar cuota de Gemini en pruebas masivas.
+// Ponelo en true para la demo / uso normal.
+bool kAnalisisIAHabilitado = true;
 
 class CategoriaReporte {
   final String nombre;
@@ -62,6 +67,15 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
   String? _origenFoto;
   // Capa 1: atestación obligatoria del usuario antes de publicar.
   bool _aceptoAtestacion = false;
+
+  // --- IA: análisis de la foto ---
+  bool _analizandoIA = false;
+  Map<String, dynamic>? _resultadoIA;
+
+  // Getters derivados del resultado de la IA
+  bool get _iaNoPlausible =>
+      _resultadoIA != null && _resultadoIA!['es_plausible'] == false;
+  bool get _bloqueadoPorIA => _analizandoIA || _iaNoPlausible;
 
   // Reporte "a distancia": el pin quedó lejos del GPS real (o no hay GPS).
   bool get _esReporteRemoto {
@@ -239,6 +253,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         _origenFoto = 'en_vivo';
         _errorFormulario = null;
       });
+      _analizarFotoConIA();
     }
   }
 
@@ -256,6 +271,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         _origenFoto = 'adjuntada';
         _errorFormulario = null;
       });
+      _analizarFotoConIA();
     }
   }
 
@@ -362,6 +378,21 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
     }
     if (_imagenSeleccionada == null) {
       setState(() => _errorFormulario = 'Falta la foto del reporte.');
+      return;
+    }
+
+    if (_analizandoIA) {
+      setState(
+        () =>
+            _errorFormulario = 'Esperá a que termine el análisis de la imagen.',
+      );
+      return;
+    }
+    if (_iaNoPlausible) {
+      setState(
+        () => _errorFormulario =
+            'La imagen no corresponde a un reporte urbano. Cambiá la foto para poder publicar.',
+      );
       return;
     }
     if (!_aceptoAtestacion) {
@@ -1191,10 +1222,164 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
     );
   }
 
+  Future<void> _analizarFotoConIA() async {
+    if (!kAnalisisIAHabilitado) return; // pausado: no llama a la API
+
+    if (_imagenSeleccionada == null || _categoriaSeleccionada == null) return;
+    setState(() {
+      _analizandoIA = true;
+      _resultadoIA = null;
+    });
+
+    try {
+      final bytes = await _imagenSeleccionada!.readAsBytes();
+      final b64 = base64Encode(bytes);
+      final resultado = await widget.controller.analizarFotoIA(
+        imagenBase64: b64,
+        categoriaElegida: _categoriaSeleccionada!.nombre,
+        categoriasValidas: _categorias.map((c) => c.nombre).toList(),
+      );
+      if (!mounted) return;
+      setState(() {
+        _resultadoIA = resultado;
+        _analizandoIA = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _analizandoIA = false);
+    }
+  }
+
+  void _aplicarSugerencia(String nombreSugerido) {
+    final cat = _categorias.firstWhere(
+      (c) => c.nombre == nombreSugerido,
+      orElse: () => _categoriaSeleccionada!,
+    );
+    setState(() {
+      _categoriaSeleccionada = cat;
+      _resultadoIA = null;
+    });
+  }
+
+  Widget _bannerIA({
+    required Color color,
+    required IconData icono,
+    required String titulo,
+    required String detalle,
+    String? accionTexto,
+    VoidCallback? onAccion,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withOpacity(0.4)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icono, color: color, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        titulo,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Colors.blueGrey[900],
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        detalle,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: Colors.blueGrey[600],
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (accionTexto != null && onAccion != null) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: onAccion,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: color,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    accionTexto,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildPaso3() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // TOGGLE PROVISIONAL: activar/desactivar análisis con IA (solo testers)
+        Container(
+          margin: const EdgeInsets.only(bottom: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.amber[50],
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.amber[200]!),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.science_outlined, size: 18, color: Colors.amber[800]),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Análisis con IA (modo prueba)',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.blueGrey[800],
+                  ),
+                ),
+              ),
+              Switch(
+                value: kAnalisisIAHabilitado,
+                activeColor: AppColors.azulPrimario,
+                onChanged: (v) {
+                  setState(() {
+                    kAnalisisIAHabilitado = v;
+                    if (!v) _resultadoIA = null; // apagar: desbloquea publicar
+                  });
+                  if (v && _imagenSeleccionada != null) _analizarFotoConIA();
+                },
+              ),
+            ],
+          ),
+        ),
         const Text(
           'Evidencia visual',
           style: TextStyle(
@@ -1329,50 +1514,107 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         ],
 
         const SizedBox(height: 16),
-
-        // CHECKBOX DE ATESTACIÓN (Capa 1: obligatorio para publicar)
-        InkWell(
-          onTap: () => setState(() => _aceptoAtestacion = !_aceptoAtestacion),
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: _aceptoAtestacion
-                  ? AppColors.azulPrimario.withOpacity(0.06)
-                  : Colors.grey[50],
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: _aceptoAtestacion
-                    ? AppColors.azulPrimario
-                    : Colors.grey[300]!,
-              ),
-            ),
+        // --- ANÁLISIS IA: sugerencia de categoría + plausibilidad ---
+        if (_analizandoIA)
+          Padding(
+            padding: const EdgeInsets.only(top: 14, bottom: 16),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Checkbox(
-                  value: _aceptoAtestacion,
-                  activeColor: AppColors.azulPrimario,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  visualDensity: VisualDensity.compact,
-                  onChanged: (v) =>
-                      setState(() => _aceptoAtestacion = v ?? false),
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    'Confirmo que esta imagen corresponde al lugar que marqué en el mapa y que el reporte es verídico.',
-                    style: TextStyle(
-                      color: Colors.blueGrey[700],
-                      fontSize: 13,
-                      height: 1.35,
-                    ),
-                  ),
+                const SizedBox(width: 10),
+                Text(
+                  'Analizando la imagen...',
+                  style: TextStyle(color: Colors.blueGrey[500], fontSize: 13),
                 ),
               ],
             ),
+          )
+        else if (_resultadoIA != null)
+          Builder(
+            builder: (context) {
+              final sugerida = _resultadoIA!['categoria_sugerida'] as String?;
+              final confianza =
+                  (_resultadoIA!['confianza'] as num?)?.toDouble() ?? 0;
+              final plausible = _resultadoIA!['es_plausible'] == true;
+              final hayMatch =
+                  sugerida != null &&
+                  _categorias.any((c) => c.nombre == sugerida);
+
+              if (!plausible) {
+                return _bannerIA(
+                  color: AppColors.problema,
+                  icono: Icons.warning_amber_rounded,
+                  titulo: 'La foto no parece un reporte urbano',
+                  detalle:
+                      _resultadoIA!['motivo']?.toString() ??
+                      'Revisá que la imagen muestre el hecho a reportar.',
+                );
+              }
+              if (hayMatch &&
+                  sugerida != _categoriaSeleccionada?.nombre &&
+                  confianza >= 0.6) {
+                return _bannerIA(
+                  color: AppColors.azulPrimario,
+                  icono: Icons.auto_awesome_rounded,
+                  titulo: 'Esto parece un "$sugerida"',
+                  detalle:
+                      'Lo clasificaste como "${_categoriaSeleccionada?.nombre}". ¿Querés cambiar?',
+                  accionTexto: 'Cambiar a $sugerida',
+                  onAccion: () => _aplicarSugerencia(sugerida),
+                );
+              }
+              return const SizedBox.shrink();
+            },
           ),
-        ),
+        // CHECKBOX DE ATESTACIÓN (Capa 1: obligatorio para publicar)
+        // CHECKBOX DE ATESTACIÓN (oculto si la IA marcó la foto como no plausible)
+        if (!_iaNoPlausible)
+          InkWell(
+            onTap: () => setState(() => _aceptoAtestacion = !_aceptoAtestacion),
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: _aceptoAtestacion
+                    ? AppColors.azulPrimario.withOpacity(0.06)
+                    : Colors.grey[50],
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _aceptoAtestacion
+                      ? AppColors.azulPrimario
+                      : Colors.grey[300]!,
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Checkbox(
+                    value: _aceptoAtestacion,
+                    activeColor: AppColors.azulPrimario,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                    onChanged: (v) =>
+                        setState(() => _aceptoAtestacion = v ?? false),
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      'Confirmo que esta imagen corresponde al lugar que marqué en el mapa y que el reporte es verídico.',
+                      style: TextStyle(
+                        color: Colors.blueGrey[700],
+                        fontSize: 13,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -1495,67 +1737,74 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
                     const SizedBox(height: 16),
 
                     // CONTROLES INFERIORES (Atrás / Continuar)
-                    Row(
-                      children: [
-                        if (_pasoActual > 1) ...[
-                          OutlinedButton(
-                            onPressed: _subiendoDatos ? null : _retrocederPaso,
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.blueGrey[600],
-                              side: BorderSide(color: Colors.grey[300]!),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                                vertical: 16,
+                    if (_pasoActual != 1)
+                      Row(
+                        children: [
+                          if (_pasoActual > 1) ...[
+                            OutlinedButton(
+                              onPressed: _subiendoDatos
+                                  ? null
+                                  : _retrocederPaso,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.blueGrey[600],
+                                side: BorderSide(color: Colors.grey[300]!),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
                               ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
+                              child: const Icon(
+                                Icons.arrow_back_ios_rounded,
+                                size: 18,
                               ),
                             ),
-                            child: const Icon(
-                              Icons.arrow_back_ios_rounded,
-                              size: 18,
+                            const SizedBox(width: 12),
+                          ],
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed:
+                                  (_subiendoDatos ||
+                                      (_pasoActual == 4 && _bloqueadoPorIA))
+                                  ? null
+                                  : (_pasoActual == 4
+                                        ? _enviarReporte
+                                        : _avanzarPaso),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.azulPrimario,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                elevation: 2,
+                              ),
+                              child: _subiendoDatos
+                                  ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 3,
+                                      ),
+                                    )
+                                  : Text(
+                                      _pasoActual == 4
+                                          ? 'Publicar Reporte'
+                                          : 'Continuar',
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
                             ),
                           ),
-                          const SizedBox(width: 12),
                         ],
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: _subiendoDatos
-                                ? null
-                                : (_pasoActual == 4
-                                      ? _enviarReporte
-                                      : _avanzarPaso),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.azulPrimario,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              elevation: 2,
-                            ),
-                            child: _subiendoDatos
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 3,
-                                    ),
-                                  )
-                                : Text(
-                                    _pasoActual == 4
-                                        ? 'Publicar Reporte'
-                                        : 'Continuar',
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
                   ],
                 ),
               ),

@@ -231,6 +231,117 @@ class HechosController extends ChangeNotifier {
     }
   }
 
+  // --- HU6.1: resumen de zona al abrir la app ---
+  static const double kRadioCercaniaMetros = 500;
+  static const int kDiasVentanaCercania = 7;
+  bool _yaVerificoCercanos = false;
+
+  Future<void> verificarHechosCercanos() async {
+    if (_yaVerificoCercanos) return;
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return; // anónimo: no aplica
+    _yaVerificoCercanos = true; // un solo intento por sesión
+
+    try {
+      final userData = await Supabase.instance.client
+          .from('usuarios')
+          .select('id')
+          .eq('auth_id', user.id)
+          .single();
+      final miId = userData['id'] as String;
+
+      // GPS actual (sin pedir permisos nuevos: si no hay, no avisamos)
+      final permiso = await Geolocator.checkPermission();
+      if (permiso == LocationPermission.denied ||
+          permiso == LocationPermission.deniedForever) {
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition();
+
+      // Qué hechos ya le avisamos
+      final vistos = await _repository.obtenerHechosVistos(miId);
+
+      final ahora = DateTime.now();
+      final cercanos = _hechosActivos.where((h) {
+        if (h.estado != 'activo') return false;
+        if (h.tipoHecho != 'problema' && h.tipoHecho != 'alerta') return false;
+        if (h.ciudadanoId == miId) return false; // no los míos
+        if (ahora.difference(h.creadoEn).inDays > kDiasVentanaCercania) {
+          return false;
+        }
+        if (vistos.contains(h.id)) return false;
+        final d = Geolocator.distanceBetween(
+          pos.latitude,
+          pos.longitude,
+          h.latitud,
+          h.longitud,
+        );
+        return d <= kRadioCercaniaMetros;
+      }).toList();
+
+      if (cercanos.isEmpty) return;
+
+      // Desglose por categoría: "2 Bache, 1 Luminaria"
+      final Map<String, int> porCategoria = {};
+      for (final h in cercanos) {
+        final cat = _extraerCategoriaLabel(h);
+        porCategoria[cat] = (porCategoria[cat] ?? 0) + 1;
+      }
+      final desglose = porCategoria.entries
+          .map((e) => '${e.value} ${e.key}')
+          .join(', ');
+      final total = cercanos.length;
+      final plural = total == 1 ? 'reporte nuevo' : 'reportes nuevos';
+
+      // Aviso agrupado
+      await _repository.crearNotificacion(
+        ciudadanoId: miId,
+        titulo: 'Reportes nuevos cerca tuyo',
+        mensaje: 'Hay $total $plural a menos de 500 m de vos: $desglose.',
+        tipo: 'sistema',
+        referenciaId: null,
+      );
+
+      // Marcamos esos hechos como ya avisados
+      await _repository.marcarHechosVistos(
+        miId,
+        cercanos.map((h) => h.id).toList(),
+      );
+    } catch (e) {
+      debugPrint('Error en verificarHechosCercanos: $e');
+    }
+  }
+
+  // --- IA: análisis de foto (sugerencia de categoría + plausibilidad) ---
+  Future<Map<String, dynamic>?> analizarFotoIA({
+    required String imagenBase64,
+    required String categoriaElegida,
+    required List<String> categoriasValidas,
+  }) async {
+    try {
+      final res = await Supabase.instance.client.functions.invoke(
+        'analizar-foto',
+        body: {
+          'imagen_base64': imagenBase64,
+          'categoria_elegida': categoriaElegida,
+          'categorias_validas': categoriasValidas,
+        },
+      );
+      if (res.data is Map) {
+        return Map<String, dynamic>.from(res.data as Map);
+      }
+      return null;
+    } on FunctionException catch (e) {
+      debugPrint(
+        'FunctionException analizarFotoIA: status=${e.status} details=${e.details}',
+      );
+      return null;
+    } catch (e) {
+      debugPrint('Error analizarFotoIA: $e');
+      return null;
+    }
+  }
+
   Future<bool> publicarNuevoHecho(HechoModel nuevoHecho) async {
     _estaCargando = true;
     notifyListeners();

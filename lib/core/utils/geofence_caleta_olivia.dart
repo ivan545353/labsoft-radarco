@@ -18,12 +18,12 @@ const LatLng kCentroCaletaOlivia = LatLng(-46.4389, -67.5191);
 /// Vértices que delimitan el área permitida para crear reportes.
 /// (latitud, longitud)
 const List<LatLng> kPoligonoCaletaOlivia = [
-  LatLng(-46.405, -67.560), // NO
-  LatLng(-46.405, -67.490), // NE (hacia la costa)
-  LatLng(-46.430, -67.475), // E
-  LatLng(-46.470, -67.490), // SE
-  LatLng(-46.475, -67.540), // SO
-  LatLng(-46.445, -67.565), // O
+  LatLng(-46.426, -67.546), // NO
+  LatLng(-46.421, -67.521), // NE (hacia la costa)
+  LatLng(-46.447, -67.503), // E
+  LatLng(-46.483, -67.488), // SE
+  LatLng(-46.490, -67.584), // SO
+  LatLng(-46.4343, -67.588), // O
 ];
 
 /// Devuelve `true` si el [punto] cae dentro del ejido urbano de Caleta Olivia.

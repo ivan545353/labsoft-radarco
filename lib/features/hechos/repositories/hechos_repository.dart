@@ -266,6 +266,26 @@ class HechosRepository {
     );
   }
 
+  // --- HU6.1: deduplicación de avisos de hechos cercanos ---
+  Future<Set<String>> obtenerHechosVistos(String ciudadanoId) async {
+    final response = await _supabase
+        .from('notificaciones_hechos_vistos')
+        .select('hecho_id')
+        .eq('ciudadano_id', ciudadanoId);
+    return (response as List).map((r) => r['hecho_id'] as String).toSet();
+  }
+
+  Future<void> marcarHechosVistos(
+    String ciudadanoId,
+    List<String> hechoIds,
+  ) async {
+    if (hechoIds.isEmpty) return;
+    final filas = hechoIds
+        .map((id) => {'ciudadano_id': ciudadanoId, 'hecho_id': id})
+        .toList();
+    await _supabase.from('notificaciones_hechos_vistos').insert(filas);
+  }
+
   // --- CAPA 5: Reportar un HECHO para moderación ---
   Future<void> reportarHechoModeracion(
     String hechoId,
