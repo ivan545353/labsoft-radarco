@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import '../models/comentario_model.dart';
 import '../controllers/hechos_controller.dart';
 import '../../../core/theme/app_colors.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ComentariosSheet extends StatefulWidget {
   final String hechoId;
@@ -26,6 +29,8 @@ class _ComentariosSheetState extends State<ComentariosSheet> {
   List<ComentarioModel> _comentarios = [];
   bool _cargando = true;
   ComentarioModel? _respondiendoA;
+  File? _fotoEvidencia;
+  bool _subiendoFoto = false;
 
   @override
   void initState() {
@@ -80,14 +85,98 @@ class _ComentariosSheetState extends State<ComentariosSheet> {
     _focusNode.unfocus();
   }
 
+  Future<void> _elegirFotoEvidencia() async {
+    final fuente = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(
+                Icons.camera_alt_rounded,
+                color: AppColors.azulPrimario,
+              ),
+              title: const Text('Tomar foto'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.photo_library_rounded,
+                color: AppColors.azulPrimario,
+              ),
+              title: const Text('Elegir de la galería'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (fuente == null) return;
+
+    final pickedFile = await ImagePicker().pickImage(
+      source: fuente,
+      imageQuality: 70,
+      maxWidth: 1200,
+    );
+    if (pickedFile != null && mounted) {
+      setState(() => _fotoEvidencia = File(pickedFile.path));
+    }
+  }
+
+  Future<String?> _subirFotoEvidencia(File archivo) async {
+    try {
+      final uid = Supabase.instance.client.auth.currentUser?.id ?? 'anon';
+      final ruta =
+          'comentarios/${DateTime.now().millisecondsSinceEpoch}_$uid.jpg';
+      final storage = Supabase.instance.client.storage.from('fotos_hechos');
+      await storage.upload(ruta, archivo);
+      return storage.getPublicUrl(ruta);
+    } catch (e) {
+      return null;
+    }
+  }
+
   void _enviarComentario() async {
-    if (_comentarioController.text.trim().isEmpty) return;
+    final texto = _comentarioController.text.trim();
+    if (texto.isEmpty && _fotoEvidencia == null) return;
+
+    setState(() => _subiendoFoto = true);
+
+    String? fotoUrl;
+    if (_fotoEvidencia != null) {
+      fotoUrl = await _subirFotoEvidencia(_fotoEvidencia!);
+      if (fotoUrl == null) {
+        if (mounted) setState(() => _subiendoFoto = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No se pudo subir la foto. Intentá de nuevo.'),
+              backgroundColor: AppColors.problema,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+    }
 
     final exito = await widget.controller.publicarComentario(
       widget.hechoId,
-      _comentarioController.text.trim(),
+      texto.isEmpty ? 'Agregó evidencia' : texto,
       respuestaAId: _respondiendoA?.id,
+      fotoUrl: fotoUrl,
     );
+
+    if (!mounted) return;
+    setState(() {
+      _subiendoFoto = false;
+      _fotoEvidencia = null;
+    });
 
     if (exito) {
       _cancelarRespuesta();
@@ -320,9 +409,67 @@ class _ComentariosSheetState extends State<ComentariosSheet> {
                       ),
 
                     // Input Text y Botón Enviar
+                    // Preview de la foto-evidencia seleccionada (HU4.3)
+                    if (_fotoEvidencia != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.file(
+                                _fotoEvidencia!,
+                                height: 80,
+                                width: 80,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            Positioned(
+                              top: 2,
+                              right: 2,
+                              child: GestureDetector(
+                                onTap: () =>
+                                    setState(() => _fotoEvidencia = null),
+                                child: Container(
+                                  decoration: const BoxDecoration(
+                                    color: Colors.black54,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.close_rounded,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    // Input Text y Botón Enviar
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
+                        // Botón adjuntar foto-evidencia
+                        GestureDetector(
+                          onTap: _subiendoFoto ? null : _elegirFotoEvidencia,
+                          child: Container(
+                            height: 48,
+                            width: 48,
+                            margin: const EdgeInsets.only(right: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.grey[200]!),
+                            ),
+                            child: Icon(
+                              Icons.add_a_photo_rounded,
+                              color: Colors.blueGrey[400],
+                              size: 20,
+                            ),
+                          ),
+                        ),
                         Expanded(
                           child: Container(
                             decoration: BoxDecoration(

@@ -354,6 +354,7 @@ class HechosController extends ChangeNotifier {
     String hechoId,
     String texto, {
     String? respuestaAId,
+    String? fotoUrl,
   }) async {
     try {
       final user = Supabase.instance.client.auth.currentUser;
@@ -368,6 +369,7 @@ class HechosController extends ChangeNotifier {
         'ciudadano_id': userData['id'],
         'contenido': texto,
         'respuesta_a_id': respuestaAId,
+        'foto_url': fotoUrl,
       });
       return true;
     } catch (e) {
