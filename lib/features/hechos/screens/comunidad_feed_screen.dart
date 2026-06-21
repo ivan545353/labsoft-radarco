@@ -19,6 +19,12 @@ class _ComunidadFeedScreenState extends State<ComunidadFeedScreen> {
   String _filtroTiempo = 'Siempre'; // Siempre, Hoy, Semana, Mes
   String _filtroCategoria = 'Todas'; // Todas, Bache, Basura...
 
+  // Lazy loading: tarjetas renderizadas; crece al hacer scroll.
+  static const int _tamanoPagina = 8;
+  int _itemsVisibles = _tamanoPagina;
+  int _totalFiltrado = 0;
+  final ScrollController _scrollController = ScrollController();
+
   final List<String> _categorias = [
     'Todas',
     'Bache',
@@ -36,6 +42,27 @@ class _ComunidadFeedScreenState extends State<ComunidadFeedScreen> {
     final match = RegExp(r'^\[(.*?)\] - (.*)$').firstMatch(descripcion);
     if (match != null) return match.group(1) ?? 'Otro';
     return tipoBackend == 'problema' ? 'Problema' : 'Alerta';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_alScrollear);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_alScrollear);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _alScrollear() {
+    if (_scrollController.position.pixels >=
+            _scrollController.position.maxScrollExtent - 400 &&
+        _itemsVisibles < _totalFiltrado) {
+      setState(() => _itemsVisibles += _tamanoPagina);
+    }
   }
 
   void _abrirPanelFiltrosAvanzados() {
@@ -271,7 +298,7 @@ class _ComunidadFeedScreenState extends State<ComunidadFeedScreen> {
             }).toList()..sort(
               (a, b) => b.creadoEn.compareTo(a.creadoEn),
             ); // Orden reciente primero
-
+        _totalFiltrado = hechosFiltrados.length;
         // Contador de filtros activos (para mostrar indicador numérico)
         int filtrosActivosCount = 0;
         if (_filtroEstado != 'Todos') filtrosActivosCount++;
@@ -280,6 +307,7 @@ class _ComunidadFeedScreenState extends State<ComunidadFeedScreen> {
         return Container(
           color: const Color(0xFFF4F7FB),
           child: CustomScrollView(
+            controller: _scrollController,
             slivers: [
               // CABECERA
               SliverPadding(
@@ -486,7 +514,20 @@ class _ComunidadFeedScreenState extends State<ComunidadFeedScreen> {
                         hecho: hechosFiltrados[index],
                         controlador: widget.controlador,
                       ),
-                      childCount: hechosFiltrados.length,
+                      childCount: _itemsVisibles < hechosFiltrados.length
+                          ? _itemsVisibles
+                          : hechosFiltrados.length,
+                    ),
+                  ),
+                ),
+              if (_itemsVisibles < hechosFiltrados.length)
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.azulPrimario,
+                      ),
                     ),
                   ),
                 ),

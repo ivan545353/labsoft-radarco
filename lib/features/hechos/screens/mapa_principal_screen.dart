@@ -621,6 +621,9 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
         // --- 1. FILTRADO DINÁMICO DE DATOS ---
         final hechosFiltrados = widget.controlador.hechosActivos.where((hecho) {
           if (hecho.tipoHecho == 'positivo') return false;
+          // Ocultar resueltos del mapa principal (solo visibles con el filtro "Resueltos")
+          if (_filtroEstado == 'Todos' && hecho.estado == 'resuelto')
+            return false;
 
           if (_filtroEstado == 'Activos' && hecho.estado == 'resuelto') {
             return false;
