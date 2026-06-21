@@ -6,7 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../auth/controllers/usuario_controller.dart';
 import '../../hechos/controllers/hechos_controller.dart';
-import '../../utils/catalogo_recompensas.dart'; // Importar catálogo
+import '../../../core/utils/catalogo_recompensas.dart'; // Importar catálogo
 
 // --- MODELO: LOGROS EVOLUTIVOS ---
 class TierLogro {

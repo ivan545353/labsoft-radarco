@@ -1,12 +1,17 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_colors.dart';
 import '../models/hecho_model.dart';
 import '../controllers/hechos_controller.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../../../core/utils/geofence_caleta_olivia.dart';
 
 class CategoriaReporte {
   final String nombre;
@@ -39,6 +44,17 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
   CategoriaReporte? _categoriaSeleccionada;
   File? _imagenSeleccionada;
   Position? _posicionActual;
+
+  // --- UBICACIÓN ELEGIDA EN EL MAPA + GEOCERCA ---
+  // Por defecto apuntamos al centro de la ciudad (siempre dentro de la geocerca).
+  // Si el GPS resuelve, lo movemos al punto real del usuario.
+  LatLng _ubicacionElegida = kCentroCaletaOlivia;
+  bool _dentroDeGeocerca = true;
+  GoogleMapController? _mapController;
+
+  // --- BÚSQUEDA POR DIRECCIÓN / CALLE ---
+  final TextEditingController _busquedaController = TextEditingController();
+  bool _buscandoDireccion = false;
 
   bool _obteniendoUbicacion = true;
   bool _subiendoDatos = false;
@@ -105,6 +121,8 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
   @override
   void dispose() {
     _descripcionController.dispose();
+    _busquedaController.dispose();
+    _mapController?.dispose();
     super.dispose();
   }
 
@@ -121,6 +139,15 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
 
     if (_pasoActual == 2 && _descripcionController.text.trim().isEmpty) {
       setState(() => _errorFormulario = 'Agrega una breve descripción.');
+      return;
+    }
+
+    // Paso 3 = Ubicación. No dejamos avanzar si el pin quedó fuera del ejido.
+    if (_pasoActual == 3 && !_dentroDeGeocerca) {
+      setState(
+        () => _errorFormulario =
+            'El punto elegido está fuera del ejido urbano de Caleta Olivia. Movè el mapa dentro del área permitida.',
+      );
       return;
     }
 
@@ -159,7 +186,15 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         setState(() {
           _posicionActual = position;
           _obteniendoUbicacion = false;
+          // Arrancamos el pin sobre la ubicación real del usuario.
+          _ubicacionElegida = LatLng(position.latitude, position.longitude);
+          _dentroDeGeocerca = estaDentroDeCaletaOlivia(_ubicacionElegida);
         });
+
+        // Si el usuario ya está en el paso del mapa, lo centramos en su GPS.
+        _mapController?.animateCamera(
+          CameraUpdate.newLatLngZoom(_ubicacionElegida, 16),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -244,8 +279,12 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
       setState(() => _errorFormulario = 'Falta la foto del reporte.');
       return;
     }
-    if (_posicionActual == null) {
-      setState(() => _errorFormulario = 'Esperando ubicación GPS...');
+    // Última barrera de seguridad: el punto elegido debe estar dentro del ejido.
+    if (!estaDentroDeCaletaOlivia(_ubicacionElegida)) {
+      setState(
+        () => _errorFormulario =
+            'El reporte está fuera del ejido urbano de Caleta Olivia.',
+      );
       return;
     }
 
@@ -320,8 +359,8 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         id: '', // Se autogenera en la BD
         ciudadanoId: ciudadanoIdReal,
         tipoHecho: _categoriaSeleccionada!.tipoBackend,
-        latitud: _posicionActual!.latitude,
-        longitud: _posicionActual!.longitude,
+        latitud: _ubicacionElegida.latitude,
+        longitud: _ubicacionElegida.longitude,
         fotoUrl: urlFotoReal,
         estado: 'activo',
         creadoEn: DateTime.now(),
@@ -360,7 +399,279 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
     }
   }
 
-  // --- VISTAS DE LOS 3 PASOS ---
+  // --- LÓGICA DEL MAPA SELECTOR (UBICACIÓN REMOTA) ---
+
+  void _recalcularGeocerca() {
+    final dentro = estaDentroDeCaletaOlivia(_ubicacionElegida);
+    if (dentro != _dentroDeGeocerca) {
+      setState(() => _dentroDeGeocerca = dentro);
+    }
+  }
+
+  Future<void> _centrarEnMiUbicacion() async {
+    if (_posicionActual == null) {
+      await _obtenerUbicacionGPS();
+    }
+    if (_posicionActual != null && _mapController != null) {
+      final destino = LatLng(
+        _posicionActual!.latitude,
+        _posicionActual!.longitude,
+      );
+      await _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(destino, 16),
+      );
+      _ubicacionElegida = destino;
+      _recalcularGeocerca();
+    }
+  }
+
+  void _mostrarAvisoBusqueda(String texto) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(texto),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Colors.blueGrey[800],
+      ),
+    );
+  }
+
+  Future<void> _buscarDireccion() async {
+    final texto = _busquedaController.text.trim();
+    if (texto.isEmpty) return;
+
+    FocusScope.of(context).unfocus();
+    setState(() => _buscandoDireccion = true);
+
+    try {
+      // Sesgamos la búsqueda hacia la ciudad para mejorar la precisión.
+      final consulta = texto.toLowerCase().contains('caleta')
+          ? texto
+          : '$texto, Caleta Olivia, Santa Cruz, Argentina';
+
+      final resultados = await locationFromAddress(consulta);
+
+      if (resultados.isEmpty) {
+        _mostrarAvisoBusqueda('No encontramos esa dirección. Probá con otra.');
+        return;
+      }
+
+      final r = resultados.first;
+      final destino = LatLng(r.latitude, r.longitude);
+      _ubicacionElegida = destino;
+
+      // El animate dispara onCameraMove/onCameraIdle, que recalculan la geocerca.
+      await _mapController?.animateCamera(
+        CameraUpdate.newLatLngZoom(destino, 17),
+      );
+      _recalcularGeocerca();
+    } catch (e) {
+      _mostrarAvisoBusqueda(
+        'No pudimos buscar esa dirección. Verificá la conexión e intentá de nuevo.',
+      );
+    } finally {
+      if (mounted) setState(() => _buscandoDireccion = false);
+    }
+  }
+
+  // --- VISTAS DE LOS 4 PASOS ---
+
+  Widget _buildPasoUbicacion() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Confirma la ubicación',
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF1D1E20),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Mové el mapa para dejar el pin justo sobre el hecho. Podés reportar un punto aunque no estés parado ahí.',
+          style: TextStyle(color: Colors.blueGrey[400], fontSize: 18),
+        ),
+        const SizedBox(height: 20),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                GoogleMap(
+                  initialCameraPosition: CameraPosition(
+                    target: _ubicacionElegida,
+                    zoom: 16,
+                  ),
+                  onMapCreated: (controller) => _mapController = controller,
+                  myLocationEnabled: true,
+                  myLocationButtonEnabled: false,
+                  zoomControlsEnabled: false,
+                  // 🔧 Evita el "tironeo": el mapa reclama el gesto de arrastre
+                  // de inmediato para no pelear con el bottom sheet deslizante.
+                  gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
+                    Factory<OneSequenceGestureRecognizer>(
+                      () => EagerGestureRecognizer(),
+                    ),
+                  },
+                  // El pin está fijo en el centro: movemos el mapa, no el pin.
+                  onCameraMove: (posicion) =>
+                      _ubicacionElegida = posicion.target,
+                  onCameraIdle: _recalcularGeocerca,
+                ),
+
+                // PIN FIJO CENTRAL (se eleva un poco para que la punta marque el centro)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 42),
+                  child: Icon(
+                    Icons.location_on,
+                    size: 50,
+                    color: _dentroDeGeocerca
+                        ? AppColors.azulPrimario
+                        : AppColors.problema,
+                  ),
+                ),
+
+                // BUSCADOR DE DIRECCIÓN + INDICADOR DENTRO / FUERA
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  right: 12,
+                  child: Column(
+                    children: [
+                      // Campo de búsqueda por calle / dirección
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 10,
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            const SizedBox(width: 14),
+                            Icon(
+                              Icons.search_rounded,
+                              color: Colors.blueGrey[400],
+                              size: 22,
+                            ),
+                            Expanded(
+                              child: TextField(
+                                controller: _busquedaController,
+                                textInputAction: TextInputAction.search,
+                                onSubmitted: (_) => _buscarDireccion(),
+                                decoration: const InputDecoration(
+                                  hintText: 'Buscar calle o dirección...',
+                                  border: InputBorder.none,
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 14,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            _buscandoDireccion
+                                ? const Padding(
+                                    padding: EdgeInsets.all(12),
+                                    child: SizedBox(
+                                      height: 18,
+                                      width: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.5,
+                                        color: AppColors.azulPrimario,
+                                      ),
+                                    ),
+                                  )
+                                : IconButton(
+                                    icon: const Icon(
+                                      Icons.arrow_forward_rounded,
+                                      color: AppColors.azulPrimario,
+                                    ),
+                                    onPressed: _buscarDireccion,
+                                  ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // INDICADOR DENTRO / FUERA
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _dentroDeGeocerca
+                              ? Colors.white
+                              : AppColors.problema,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 10,
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _dentroDeGeocerca
+                                  ? Icons.check_circle_rounded
+                                  : Icons.location_off_rounded,
+                              size: 18,
+                              color: _dentroDeGeocerca
+                                  ? AppColors.exito
+                                  : Colors.white,
+                            ),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                _dentroDeGeocerca
+                                    ? 'Dentro de Caleta Olivia'
+                                    : 'Fuera del área permitida',
+                                style: TextStyle(
+                                  color: _dentroDeGeocerca
+                                      ? Colors.blueGrey[800]
+                                      : Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // BOTÓN "CENTRAR EN MI UBICACIÓN"
+                Positioned(
+                  bottom: 16,
+                  right: 16,
+                  child: FloatingActionButton.small(
+                    heroTag: 'fab_centrar_ubicacion',
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppColors.azulPrimario,
+                    elevation: 4,
+                    onPressed: _centrarEnMiUbicacion,
+                    child: const Icon(Icons.my_location_rounded),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _buildPaso1() {
     return Column(
@@ -688,7 +999,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
               child: Row(
                 children: [
                   Text(
-                    'Paso $_pasoActual de 3',
+                    'Paso $_pasoActual de 4',
                     style: TextStyle(
                       color: Colors.blueGrey[400],
                       fontWeight: FontWeight.bold,
@@ -698,7 +1009,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: LinearProgressIndicator(
-                      value: _pasoActual / 3,
+                      value: _pasoActual / 4,
                       backgroundColor: Colors.grey[200],
                       color: AppColors.azulPrimario,
                       borderRadius: BorderRadius.circular(10),
@@ -732,6 +1043,8 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
                               ? _buildPaso1()
                               : _pasoActual == 2
                               ? _buildPaso2()
+                              : _pasoActual == 3
+                              ? _buildPasoUbicacion()
                               : _buildPaso3(),
                         ),
                       ),
@@ -800,7 +1113,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
                           child: ElevatedButton(
                             onPressed: _subiendoDatos
                                 ? null
-                                : (_pasoActual == 3
+                                : (_pasoActual == 4
                                       ? _enviarReporte
                                       : _avanzarPaso),
                             style: ElevatedButton.styleFrom(
@@ -821,7 +1134,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
                                     ),
                                   )
                                 : Text(
-                                    _pasoActual == 3
+                                    _pasoActual == 4
                                         ? 'Publicar Reporte'
                                         : 'Continuar',
                                     style: const TextStyle(

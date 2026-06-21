@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/controllers/usuario_controller.dart';
 import '../../hechos/controllers/hechos_controller.dart';
-import '../../../features/utils/catalogo_recompensas.dart'; // Importamos el catálogo
+import '../../../core/utils/catalogo_recompensas.dart'; // Importamos el catálogo
 
 class EditarPerfilScreen extends StatefulWidget {
   final UsuarioController usuarioController;
