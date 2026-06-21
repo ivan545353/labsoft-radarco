@@ -4,6 +4,7 @@ class ComentarioModel {
   final String ciudadanoId;
   final String contenido;
   final DateTime creadoEn;
+  final String? fotoUrl;
   final String? nombreAutor;
   final String? avatarAutor;
   final String? respuestaAId;
@@ -20,6 +21,7 @@ class ComentarioModel {
     required this.ciudadanoId,
     required this.contenido,
     required this.creadoEn,
+    this.fotoUrl,
     this.nombreAutor,
     this.avatarAutor,
     this.respuestaAId,
@@ -41,6 +43,7 @@ class ComentarioModel {
       ciudadanoId: json['ciudadano_id'],
       contenido: json['contenido'],
       creadoEn: DateTime.parse(json['creado_en']),
+      fotoUrl: json['foto_url'],
       nombreAutor: json['usuarios'] != null
           ? json['usuarios']['alias']
           : 'Anónimo',

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/hecho_model.dart';
 import '../repositories/hechos_repository.dart';
@@ -124,6 +125,109 @@ class HechosController extends ChangeNotifier {
           },
         ),
       );
+    }
+  }
+
+  // --- INTERCEPTOR DE DUPLICADOS (interceptor blando) ---
+  static const double kRadioDuplicadoMetros = 40;
+
+  // Extrae la etiqueta de categoría ([Bache] - ...) o cae al tipo backend.
+  String _extraerCategoriaLabel(HechoModel h) {
+    final desc = h.descripcion ?? '';
+    final match = RegExp(r'^\[(.*?)\] - ').firstMatch(desc);
+    if (match != null) return (match.group(1) ?? '').trim();
+    return h.tipoHecho == 'problema' ? 'Problema' : 'Alerta';
+  }
+
+  // Devuelve el hecho activo más cercano (misma categoría, < 40 m) o null.
+  HechoModel? detectarDuplicado(String categoriaLabel, double lat, double lng) {
+    HechoModel? masCercano;
+    double distanciaMin = double.infinity;
+
+    for (final h in _hechosActivos) {
+      if (h.estado != 'activo') continue;
+      if (h.tipoHecho != 'problema' && h.tipoHecho != 'alerta') continue;
+      if (_extraerCategoriaLabel(h).toLowerCase() !=
+          categoriaLabel.trim().toLowerCase()) {
+        continue;
+      }
+
+      final d = Geolocator.distanceBetween(lat, lng, h.latitud, h.longitud);
+      if (d <= kRadioDuplicadoMetros && d < distanciaMin) {
+        distanciaMin = d;
+        masCercano = h;
+      }
+    }
+    return masCercano;
+  }
+
+  // El usuario confirmó que su reporte es el mismo que [original]:
+  // suma su confirmación, adjunta su evidencia y le deja un aviso durable.
+  Future<bool> confirmarComoDuplicado({
+    required HechoModel original,
+    required String ciudadanoId,
+    required String textoEvidencia,
+    String? fotoUrlEvidencia,
+  }) async {
+    try {
+      // 1. Suma "sigue pasando" (consenso + reputación vía trigger)
+      try {
+        await _repository.registrarInteraccion(
+          hechoId: original.id,
+          ciudadanoId: ciudadanoId,
+          tipoInteraccion: 'sigue_pasando',
+        );
+      } catch (e) {
+        debugPrint(
+          'Aviso: no se pudo sumar sigue_pasando (quizá ya existía): $e',
+        );
+      }
+
+      // 2. Adjunta su aporte como evidencia (HU4.3)
+      final texto = textoEvidencia.trim().isEmpty
+          ? 'Reporté lo mismo desde este lugar.'
+          : textoEvidencia.trim();
+      await _repository.agregarEvidencia(
+        original.id,
+        ciudadanoId,
+        texto,
+        fotoUrlEvidencia,
+      );
+
+      // 3. Aviso durable para el usuario que reportó el duplicado
+      final categoria = _extraerCategoriaLabel(original);
+      await _repository.crearNotificacion(
+        ciudadanoId: ciudadanoId,
+        titulo: 'Tu aporte se sumó a un reporte existente',
+        mensaje:
+            'Ya había un reporte de "$categoria" muy cerca. Sumamos tu confirmación y tu evidencia al reporte original.',
+        tipo: 'interaccion',
+        referenciaId: original.id,
+      );
+
+      // 3b. Aviso al AUTOR ORIGINAL del hecho (si no es la misma persona)
+      if (original.ciudadanoId != ciudadanoId) {
+        try {
+          await _repository.crearNotificacion(
+            ciudadanoId: original.ciudadanoId,
+            titulo: 'Confirmaron tu reporte',
+            mensaje:
+                'Un vecino reportó lo mismo cerca de tu reporte de "$categoria" y sumó evidencia. Ahora tiene más respaldo comunitario.',
+            tipo: 'interaccion',
+            referenciaId: original.id,
+          );
+        } catch (e) {
+          debugPrint('Aviso: no se pudo notificar al autor original: $e');
+        }
+      }
+
+      // 4. Refresca el estado en memoria
+      await cargarHechos();
+      return true;
+    } catch (e) {
+      _mensajeError = 'No se pudo sumar tu aporte: $e';
+      notifyListeners();
+      return false;
     }
   }
 
@@ -328,6 +432,30 @@ class HechosController extends ChangeNotifier {
           .eq('id', comentarioId);
       return true;
     } catch (e) {
+      return false;
+    }
+  }
+
+  // --- CAPA 5: Reportar un hecho para moderación ---
+  Future<bool> reportarHecho(String hechoId, String motivo) async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return false;
+
+      final userData = await Supabase.instance.client
+          .from('usuarios')
+          .select('id')
+          .eq('auth_id', user.id)
+          .single();
+
+      await _repository.reportarHechoModeracion(
+        hechoId,
+        userData['id'],
+        motivo,
+      );
+      return true;
+    } catch (e) {
+      debugPrint('Error al reportar hecho: $e');
       return false;
     }
   }

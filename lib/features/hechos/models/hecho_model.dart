@@ -9,6 +9,9 @@ class HechoModel {
   final DateTime creadoEn;
   final String? descripcion;
 
+  // Capa 2 (transparencia): cómo se obtuvo la foto -> 'en_vivo' | 'adjuntada'
+  final String? origenFoto;
+
   // Datos del autor (Join)
   final String? nombreAutor;
   final String? avatarAutor;
@@ -28,6 +31,7 @@ class HechoModel {
     required this.estado,
     required this.creadoEn,
     this.descripcion,
+    this.origenFoto,
     this.nombreAutor,
     this.avatarAutor,
     this.reputacionAutor,
@@ -46,6 +50,7 @@ class HechoModel {
       estado: json['estado'],
       creadoEn: DateTime.parse(json['creado_en']),
       descripcion: json['descripcion'],
+      origenFoto: json['origen_foto'],
       nombreAutor: json['nombre_autor'],
       avatarAutor: json['avatar_autor'],
       reputacionAutor: json['reputacion_autor'] != null
@@ -69,6 +74,7 @@ class HechoModel {
       'foto_url': fotoUrl,
       'estado': estado,
       'descripcion': descripcion,
+      'origen_foto': origenFoto,
     };
   }
 }

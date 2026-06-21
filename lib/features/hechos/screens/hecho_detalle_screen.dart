@@ -211,6 +211,73 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
     );
   }
 
+  // --- CAPA 5: Reportar este hecho para moderación ---
+  void _manejarReporte() {
+    if (_requiereLogin()) return;
+
+    const motivos = [
+      'No corresponde a la ubicación',
+      'Información falsa o engañosa',
+      'Contenido inapropiado',
+      'Spam o duplicado',
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+              child: Text(
+                '¿Por qué reportás este hecho?',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.blueGrey[900],
+                ),
+              ),
+            ),
+            ...motivos.map(
+              (motivo) => ListTile(
+                leading: Icon(Icons.flag_outlined, color: Colors.blueGrey[400]),
+                title: Text(motivo),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  final exito = await widget.controller.reportarHecho(
+                    widget.hecho.id,
+                    motivo,
+                  );
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        exito
+                            ? 'Gracias. Un moderador revisará este reporte.'
+                            : 'No pudimos enviar el reporte. Intentá de nuevo.',
+                      ),
+                      backgroundColor: exito
+                          ? AppColors.exito
+                          : AppColors.problema,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   Map<String, String> _parsearDescripcion() {
     String descRaw = widget.hecho.descripcion ?? 'Sin descripción';
     final match = RegExp(r'^\[(.*?)\] - (.*)$').firstMatch(descRaw);
@@ -450,6 +517,14 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
             backgroundColor: colorPrincipal,
             iconTheme: const IconThemeData(color: Colors.white),
             elevation: 0,
+            actions: [
+              if (!_esMio)
+                IconButton(
+                  tooltip: 'Reportar',
+                  icon: const Icon(Icons.flag_outlined, color: Colors.white),
+                  onPressed: _manejarReporte,
+                ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               background:
                   widget.hecho.fotoUrl != null &&
@@ -502,6 +577,53 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // SELLO DE TRANSPARENCIA (Capa 2)
+                        if (widget.hecho.origenFoto != null) ...[
+                          const SizedBox(height: 14),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: widget.hecho.origenFoto == 'en_vivo'
+                                  ? Colors.green[50]
+                                  : Colors.amber[50],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  widget.hecho.origenFoto == 'en_vivo'
+                                      ? Icons.photo_camera_rounded
+                                      : Icons.info_outline_rounded,
+                                  size: 16,
+                                  color: widget.hecho.origenFoto == 'en_vivo'
+                                      ? Colors.green[700]
+                                      : Colors.amber[800],
+                                ),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Text(
+                                    widget.hecho.origenFoto == 'en_vivo'
+                                        ? 'Foto tomada en el lugar'
+                                        : 'Imagen adjunta · reporte a distancia',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color:
+                                          widget.hecho.origenFoto == 'en_vivo'
+                                          ? Colors.green[800]
+                                          : Colors.amber[900],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 20),
                         Row(
                           children: [
                             Container(

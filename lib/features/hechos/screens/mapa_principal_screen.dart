@@ -251,23 +251,21 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
   Widget _buildNavItem(int index, IconData icon, String label) {
     final isSelected = _indiceTabActual == index;
 
-    // 1. Construimos el ícono base normal
     Widget iconWidget = Icon(
       icon,
       color: isSelected ? AppColors.azulPrimario : Colors.blueGrey[400],
       size: 24,
     );
 
-    // 2. MAGIA: Si es el botón de "Avisos" (índice 2), lo envolvemos con el Badge reactivo
     if (index == 2) {
       iconWidget = ListenableBuilder(
         listenable: _notificacionesController,
         builder: (context, child) {
           return Badge(
             isLabelVisible: _notificacionesController.mostrarPuntoEnDock,
-            backgroundColor: Colors.redAccent, // Color de alerta
-            smallSize: 10, // Tamaño sutil del punto
-            child: child, // Reutiliza el ícono base sin redibujarlo
+            backgroundColor: Colors.redAccent,
+            smallSize: 10,
+            child: child,
           );
         },
         child: iconWidget,
@@ -299,7 +297,7 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
         ),
         child: Row(
           children: [
-            iconWidget, // Usamos el ícono modificado en lugar del ícono estático
+            iconWidget,
             if (isSelected) ...[
               const SizedBox(width: 8),
               Text(
@@ -341,7 +339,8 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
 
   // --- VARIABLES DE FILTRO ---
   String _filtroEstado = 'Todos';
-  String _filtroTiempo = 'Siempre';
+  // 🔥 CAMBIO CLAVE: Preseleccionamos 'Semana' por defecto
+  String _filtroTiempo = 'Semana';
   String _filtroCategoria = 'Todas';
 
   final List<String> _categorias = [
@@ -364,19 +363,21 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (widget.controlador.hechosActivos.isEmpty)
+      if (widget.controlador.hechosActivos.isEmpty) {
         widget.controlador.cargarHechos();
+      }
     });
   }
 
   // --- INTELIGENCIA DE PARSEO ---
   Map<String, String> _parsearDescripcion(String descRaw, String tipoBackend) {
     final match = RegExp(r'^\[(.*?)\] - (.*)$').firstMatch(descRaw);
-    if (match != null)
+    if (match != null) {
       return {
         'categoria': match.group(1) ?? 'Reporte',
         'descripcion': match.group(2) ?? '',
       };
+    }
     return {
       'categoria': tipoBackend == 'problema' ? 'Problema' : 'Alerta',
       'descripcion': descRaw,
@@ -493,8 +494,9 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
                           ),
                           selected: isSelected,
                           onSelected: (val) {
-                            if (val)
+                            if (val) {
                               setModalState(() => _filtroEstado = estado);
+                            }
                             setState(() {});
                           },
                           selectedColor: AppColors.azulPrimario,
@@ -542,8 +544,9 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
                           ),
                           selected: isSelected,
                           onSelected: (val) {
-                            if (val)
+                            if (val) {
                               setModalState(() => _filtroTiempo = tiempo);
+                            }
                             setState(() {});
                           },
                           selectedColor: AppColors.azulPrimario,
@@ -562,7 +565,8 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
                           onPressed: () {
                             setModalState(() {
                               _filtroEstado = 'Todos';
-                              _filtroTiempo = 'Siempre';
+                              _filtroTiempo =
+                                  'Siempre'; // Al limpiar, le permitimos ver todo el historial
                               _filtroCategoria = 'Todas';
                             });
                             setState(() {});
@@ -618,14 +622,17 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
         final hechosFiltrados = widget.controlador.hechosActivos.where((hecho) {
           if (hecho.tipoHecho == 'positivo') return false;
 
-          if (_filtroEstado == 'Activos' && hecho.estado == 'resuelto')
+          if (_filtroEstado == 'Activos' && hecho.estado == 'resuelto') {
             return false;
-          if (_filtroEstado == 'Resueltos' && hecho.estado != 'resuelto')
+          }
+          if (_filtroEstado == 'Resueltos' && hecho.estado != 'resuelto') {
             return false;
+          }
 
           final diasAntiguedad = DateTime.now()
               .difference(hecho.creadoEn)
               .inDays;
+
           if (_filtroTiempo == 'Hoy' && diasAntiguedad > 1) return false;
           if (_filtroTiempo == 'Semana' && diasAntiguedad > 7) return false;
           if (_filtroTiempo == 'Mes' && diasAntiguedad > 30) return false;
@@ -653,7 +660,7 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
 
         int filtrosActivosCount = 0;
         if (_filtroEstado != 'Todos') filtrosActivosCount++;
-        if (_filtroTiempo != 'Siempre') filtrosActivosCount++;
+        if (_filtroTiempo != 'Siempre') filtrosActivosCount++; // Empezará en 1
 
         // Verifica si la tarjeta activa sigue siendo válida tras el filtro
         final bool mostrarTarjetaSeleccionada =
@@ -675,8 +682,9 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
               markers:
                   marcadoresFiltrados, // ¡MAGIA! Pasamos solo los pines filtrados
               onTap: (LatLng posicion) {
-                if (_hechoSeleccionado != null)
+                if (_hechoSeleccionado != null) {
                   setState(() => _hechoSeleccionado = null);
+                }
               },
             ),
 
@@ -747,8 +755,9 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
                       ),
                       selected: isSelected,
                       onSelected: (selected) {
-                        if (selected)
+                        if (selected) {
                           setState(() => _filtroCategoria = categoria);
+                        }
                       },
                       backgroundColor: Colors.white.withOpacity(0.9),
                       selectedColor: AppColors.azulPrimario,

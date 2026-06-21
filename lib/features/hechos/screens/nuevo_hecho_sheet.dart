@@ -12,6 +12,7 @@ import '../controllers/hechos_controller.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../core/utils/geofence_caleta_olivia.dart';
+import 'hecho_detalle_screen.dart';
 
 class CategoriaReporte {
   final String nombre;
@@ -55,6 +56,24 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
   // --- BÚSQUEDA POR DIRECCIÓN / CALLE ---
   final TextEditingController _busquedaController = TextEditingController();
   bool _buscandoDireccion = false;
+
+  // --- CONFIANZA DEL DATO (Capas 1 y 2) ---
+  // Origen de la foto: 'en_vivo' (cámara, en el lugar) | 'adjuntada' (galería, remoto)
+  String? _origenFoto;
+  // Capa 1: atestación obligatoria del usuario antes de publicar.
+  bool _aceptoAtestacion = false;
+
+  // Reporte "a distancia": el pin quedó lejos del GPS real (o no hay GPS).
+  bool get _esReporteRemoto {
+    if (_posicionActual == null) return true;
+    final distancia = Geolocator.distanceBetween(
+      _posicionActual!.latitude,
+      _posicionActual!.longitude,
+      _ubicacionElegida.latitude,
+      _ubicacionElegida.longitude,
+    );
+    return distancia > 80; // metros
+  }
 
   bool _obteniendoUbicacion = true;
   bool _subiendoDatos = false;
@@ -217,9 +236,75 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
     if (pickedFile != null && mounted) {
       setState(() {
         _imagenSeleccionada = File(pickedFile.path);
+        _origenFoto = 'en_vivo';
         _errorFormulario = null;
       });
     }
+  }
+
+  Future<void> _elegirDeGaleria() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+      maxWidth: 1200,
+    );
+
+    if (pickedFile != null && mounted) {
+      setState(() {
+        _imagenSeleccionada = File(pickedFile.path);
+        _origenFoto = 'adjuntada';
+        _errorFormulario = null;
+      });
+    }
+  }
+
+  // En el lugar -> cámara directa. A distancia -> dejamos elegir cámara o galería.
+  void _seleccionarFoto() {
+    if (!_esReporteRemoto) {
+      _tomarFoto();
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(
+                Icons.camera_alt_rounded,
+                color: AppColors.azulPrimario,
+              ),
+              title: const Text('Tomar foto ahora'),
+              onTap: () {
+                Navigator.pop(context);
+                _tomarFoto();
+              },
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.photo_library_rounded,
+                color: AppColors.azulPrimario,
+              ),
+              title: const Text('Elegir de la galería'),
+              subtitle: const Text('Para reportar un lugar donde no estás'),
+              onTap: () {
+                Navigator.pop(context);
+                _elegirDeGaleria();
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<String?> _subirImagenASupabase(
@@ -279,6 +364,13 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
       setState(() => _errorFormulario = 'Falta la foto del reporte.');
       return;
     }
+    if (!_aceptoAtestacion) {
+      setState(
+        () => _errorFormulario =
+            'Debés confirmar que la imagen corresponde al lugar marcado.',
+      );
+      return;
+    }
     // Última barrera de seguridad: el punto elegido debe estar dentro del ejido.
     if (!estaDentroDeCaletaOlivia(_ubicacionElegida)) {
       setState(
@@ -294,38 +386,6 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
     });
 
     try {
-      // --- 🛑 INTERCEPTOR DE DUPLICADOS TEMPORALMENTE DESACTIVADO PARA PRUEBAS ---
-      /*
-      final hechoOriginal = widget.controller.detectarDuplicado(
-        _categoriaSeleccionada!.tipoBackend,
-        _posicionActual!.latitude,
-        _posicionActual!.longitude,
-      );
-
-      if (hechoOriginal != null) {
-        await widget.controller.enviarInteraccion(hechoOriginal.id, 'sigue_pasando');
-        await widget.controller.cargarHechos();
-
-        if (!mounted) return;
-        setState(() => _subiendoDatos = false);
-        Navigator.pop(context);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text(
-              '📍 ¡Aviso fusionado! Alguien ya reportó esto cerca.',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-            backgroundColor: AppColors.azulPrimario,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 5),
-          ),
-        );
-        return; 
-      }
-      */
-      // ------------------------------------------------------------------------
-
       // 2. TRADUCCIÓN DE ID (Con Fallback de Seguridad RLS)
       String ciudadanoIdReal = widget.ciudadanoId;
       try {
@@ -340,6 +400,36 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         }
       } catch (err) {
         debugPrint('Aviso: No se pudo traducir el ID. Usando original. $err');
+      }
+
+      // --- INTERCEPTOR BLANDO DE DUPLICADOS ---
+      // Detección en memoria: misma categoría, < 40 m, hecho activo.
+      final hechoOriginal = widget.controller.detectarDuplicado(
+        _categoriaSeleccionada!.nombre,
+        _ubicacionElegida.latitude,
+        _ubicacionElegida.longitude,
+      );
+
+      if (hechoOriginal != null) {
+        if (!mounted) return;
+        setState(
+          () => _subiendoDatos = false,
+        ); // pausa el spinner mientras decide
+
+        final decision = await _mostrarHojaDuplicado(hechoOriginal);
+
+        // Canceló (tocó fuera): no hacemos nada, sus datos quedan en el formulario.
+        if (decision == null) return;
+
+        // Confirmó que es el mismo hecho -> sumamos su aporte al original.
+        if (decision == 'mismo') {
+          await _confirmarDuplicado(hechoOriginal, ciudadanoIdReal);
+          return;
+        }
+
+        // Eligió "es un hecho distinto" -> seguimos publicando normalmente.
+        if (!mounted) return;
+        setState(() => _subiendoDatos = true);
       }
 
       // 3. SUBIR IMAGEN A STORAGE
@@ -365,6 +455,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         estado: 'activo',
         creadoEn: DateTime.now(),
         descripcion: descripcionFinal,
+        origenFoto: _origenFoto ?? 'en_vivo',
       );
 
       // 5. PUBLICAR
@@ -397,6 +488,287 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         _errorFormulario = 'DEBUG SQL: ${e.toString()}';
       });
     }
+  }
+
+  // --- INTERCEPTOR BLANDO: hoja de desambiguación ---
+  // Devuelve 'mismo', 'distinto' o null (si el usuario la cierra).
+  Future<String?> _mostrarHojaDuplicado(HechoModel original) async {
+    final conteos = await widget.controller.obtenerConteoInteracciones(
+      original.id,
+    );
+    final confirmaciones = conteos['sigue_pasando'] ?? 0;
+    final distancia = Geolocator.distanceBetween(
+      _ubicacionElegida.latitude,
+      _ubicacionElegida.longitude,
+      original.latitud,
+      original.longitud,
+    ).round();
+
+    // Parseo de categoría y descripción del original
+    final desc = original.descripcion ?? '';
+    final match = RegExp(r'^\[(.*?)\] - (.*)$').firstMatch(desc);
+    final categoria = match?.group(1) ?? 'Reporte';
+    final descripcionLimpia = match?.group(2) ?? desc;
+
+    final dif = DateTime.now().difference(original.creadoEn);
+    final hace = dif.inDays > 0
+        ? 'hace ${dif.inDays}d'
+        : dif.inHours > 0
+        ? 'hace ${dif.inHours}h'
+        : 'hace ${dif.inMinutes}m';
+
+    if (!mounted) return null;
+
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            24,
+            20,
+            24,
+            24 + MediaQuery.of(ctx).viewInsets.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Icon(
+                    Icons.copy_all_rounded,
+                    color: AppColors.azulPrimario,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Parece que esto ya fue reportado',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.blueGrey[900],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Encontramos un reporte muy cerca ($distancia m). ¿Es el mismo hecho?',
+                style: TextStyle(color: Colors.blueGrey[500], fontSize: 14),
+              ),
+              const SizedBox(height: 18),
+
+              // Tarjeta del reporte original
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Colors.grey[200]!),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (original.fotoUrl != null &&
+                        original.fotoUrl!.isNotEmpty)
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(18),
+                        ),
+                        child: Image.network(
+                          original.fotoUrl!,
+                          height: 140,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          cacheWidth: 700,
+                          errorBuilder: (c, e, s) => Container(
+                            height: 140,
+                            color: Colors.grey[200],
+                            child: const Icon(
+                              Icons.broken_image_rounded,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            categoria.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                              color: AppColors.azulPrimario,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            descripcionLimpia.isNotEmpty
+                                ? descripcionLimpia
+                                : 'Reporte en la zona',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.blueGrey[900],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.people_alt_rounded,
+                                size: 14,
+                                color: Colors.blueGrey[400],
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '$confirmaciones confirman · $hace',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.blueGrey[500],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Acción principal: es lo mismo
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => Navigator.pop(ctx, 'mismo'),
+                  icon: const Icon(Icons.check_circle_rounded, size: 20),
+                  label: const Text(
+                    'Es lo mismo, sumar mi aporte',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.azulPrimario,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Acción secundaria: es distinto
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'distinto'),
+                  child: Text(
+                    'Es un hecho distinto, publicar igual',
+                    style: TextStyle(
+                      color: Colors.blueGrey[700],
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // El usuario confirmó "es lo mismo": subimos su foto como evidencia,
+  // sumamos su aporte al original y lo llevamos al detalle del original.
+  Future<void> _confirmarDuplicado(
+    HechoModel original,
+    String ciudadanoIdReal,
+  ) async {
+    if (!mounted) return;
+    setState(() => _subiendoDatos = true);
+
+    // Subimos su foto como evidencia adjunta al original.
+    final urlEvidencia = await _subirImagenASupabase(
+      _imagenSeleccionada!,
+      ciudadanoIdReal,
+    );
+
+    final ok = await widget.controller.confirmarComoDuplicado(
+      original: original,
+      ciudadanoId: ciudadanoIdReal,
+      textoEvidencia: _descripcionController.text.trim(),
+      fotoUrlEvidencia: urlEvidencia,
+    );
+
+    if (!mounted) return;
+    setState(() => _subiendoDatos = false);
+
+    if (!ok) {
+      setState(
+        () => _errorFormulario =
+            widget.controller.mensajeError ?? 'No se pudo sumar tu aporte.',
+      );
+      return;
+    }
+
+    // Refrescamos el original para mostrar los conteos actualizados.
+    final actualizado =
+        await widget.controller.obtenerHechoPorId(original.id) ?? original;
+
+    if (!mounted) return;
+
+    // Capturamos navigator y messenger ANTES de cerrar la hoja.
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
+    navigator.pop(); // cierra la hoja de nuevo reporte
+    navigator.push(
+      MaterialPageRoute(
+        builder: (_) => HechoDetalleScreen(
+          hecho: actualizado,
+          controller: widget.controller,
+        ),
+      ),
+    );
+
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Sumaste tu aporte a este reporte. ¡Gracias por confirmar!',
+        ),
+        backgroundColor: AppColors.azulPrimario,
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 4),
+      ),
+    );
   }
 
   // --- LÓGICA DEL MAPA SELECTOR (UBICACIÓN REMOTA) ---
@@ -833,15 +1205,17 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         ),
         const SizedBox(height: 6),
         Text(
-          'Una imagen vale más que mil palabras. Asegúrate de mostrar claramente el reporte.',
-          style: TextStyle(color: Colors.blueGrey[400], fontSize: 22),
+          _esReporteRemoto
+              ? 'Reporte a distancia: podés tomar una foto o adjuntar una de tu galería que muestre el lugar.'
+              : 'Una imagen vale más que mil palabras. Asegúrate de mostrar claramente el reporte.',
+          style: TextStyle(color: Colors.blueGrey[400], fontSize: 20),
         ),
         const SizedBox(height: 24),
 
-        // BOTÓN CÁMARA GIGANTE
+        // BOTÓN CÁMARA / GALERÍA
         Expanded(
           child: InkWell(
-            onTap: _tomarFoto,
+            onTap: _seleccionarFoto,
             borderRadius: BorderRadius.circular(24),
             child: Container(
               width: double.infinity,
@@ -911,7 +1285,9 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'Tocar para abrir la cámara',
+                          _esReporteRemoto
+                              ? 'Tocar para tomar o adjuntar una foto'
+                              : 'Tocar para abrir la cámara',
                           style: TextStyle(
                             color: Colors.blueGrey[600],
                             fontSize: 16,
@@ -925,43 +1301,76 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         ),
         const SizedBox(height: 16),
 
-        // ESTATUS GPS SUTIL
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          decoration: BoxDecoration(
-            color: _obteniendoUbicacion
-                ? Colors.orange[50]
-                : AppColors.exito.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+        // SELLO DE ORIGEN DE LA FOTO (Capa 2: transparencia)
+        if (_origenFoto != null) ...[
+          const SizedBox(height: 12),
+          Row(
             children: [
-              _obteniendoUbicacion
-                  ? const SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(
-                      Icons.gps_fixed,
-                      color: AppColors.exito,
-                      size: 18,
-                    ),
+              Icon(
+                _origenFoto == 'en_vivo'
+                    ? Icons.photo_camera_rounded
+                    : Icons.collections_rounded,
+                size: 16,
+                color: Colors.blueGrey[500],
+              ),
               const SizedBox(width: 8),
               Text(
-                _obteniendoUbicacion
-                    ? 'Obteniendo ubicación exacta...'
-                    : 'Ubicación GPS fijada correctamente',
+                _origenFoto == 'en_vivo'
+                    ? 'Foto tomada en el lugar'
+                    : 'Imagen adjunta (reporte a distancia)',
                 style: TextStyle(
-                  color: _obteniendoUbicacion
-                      ? Colors.orange[800]
-                      : AppColors.exito,
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
+                  color: Colors.blueGrey[500],
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
+          ),
+        ],
+
+        const SizedBox(height: 16),
+
+        // CHECKBOX DE ATESTACIÓN (Capa 1: obligatorio para publicar)
+        InkWell(
+          onTap: () => setState(() => _aceptoAtestacion = !_aceptoAtestacion),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: _aceptoAtestacion
+                  ? AppColors.azulPrimario.withOpacity(0.06)
+                  : Colors.grey[50],
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: _aceptoAtestacion
+                    ? AppColors.azulPrimario
+                    : Colors.grey[300]!,
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Checkbox(
+                  value: _aceptoAtestacion,
+                  activeColor: AppColors.azulPrimario,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                  onChanged: (v) =>
+                      setState(() => _aceptoAtestacion = v ?? false),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    'Confirmo que esta imagen corresponde al lugar que marqué en el mapa y que el reporte es verídico.',
+                    style: TextStyle(
+                      color: Colors.blueGrey[700],
+                      fontSize: 13,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],

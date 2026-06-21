@@ -675,6 +675,44 @@ class _ItemComentarioState extends State<_ItemComentario> {
                       ),
                     ),
 
+                    // Foto de evidencia adjunta (HU4.3)
+                    if (widget.comentario.fotoUrl != null &&
+                        widget.comentario.fotoUrl!.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: Image.network(
+                          widget.comentario.fotoUrl!,
+                          width: double.infinity,
+                          height: 160,
+                          fit: BoxFit.cover,
+                          cacheWidth: 600,
+                          loadingBuilder: (context, child, progress) {
+                            if (progress == null) return child;
+                            return Container(
+                              height: 160,
+                              color: Colors.grey[100],
+                              child: const Center(
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stack) => Container(
+                            height: 160,
+                            color: Colors.grey[100],
+                            child: const Center(
+                              child: Icon(
+                                Icons.broken_image_rounded,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+
                     const SizedBox(height: 8),
 
                     // Acciones (Responder, Like)

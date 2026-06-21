@@ -226,4 +226,56 @@ class HechosRepository {
       'contenido': texto,
     });
   }
+
+  // --- HU4.3: Adjuntar evidencia (texto + foto opcional) a un hecho ---
+  Future<void> agregarEvidencia(
+    String hechoId,
+    String ciudadanoId,
+    String texto,
+    String? fotoUrl,
+  ) async {
+    await _supabase.from('comentarios').insert({
+      'hecho_id': hechoId,
+      'ciudadano_id': ciudadanoId,
+      'contenido': texto,
+      'foto_url': fotoUrl,
+    });
+  }
+
+  // --- Crear una notificación durable para un usuario ---
+  // Usa la función SECURITY DEFINER 'crear_notificacion' (saltea RLS de
+  // forma controlada). Permite notificar tanto al usuario actual como a
+  // un tercero (p. ej. el autor original de un hecho).
+  Future<void> crearNotificacion({
+    required String ciudadanoId,
+    required String titulo,
+    required String mensaje,
+    required String
+    tipo, // 'consenso' | 'interaccion' | 'sistema' | 'gamificacion'
+    String? referenciaId,
+  }) async {
+    await _supabase.rpc(
+      'crear_notificacion',
+      params: {
+        'p_ciudadano_id': ciudadanoId,
+        'p_titulo': titulo,
+        'p_mensaje': mensaje,
+        'p_tipo': tipo,
+        'p_referencia_id': referenciaId,
+      },
+    );
+  }
+
+  // --- CAPA 5: Reportar un HECHO para moderación ---
+  Future<void> reportarHechoModeracion(
+    String hechoId,
+    String ciudadanoId,
+    String motivo,
+  ) async {
+    await _supabase.from('reportes_moderacion').insert({
+      'reportado_por_id': ciudadanoId,
+      'hecho_id': hechoId,
+      'motivo': motivo,
+    });
+  }
 }
