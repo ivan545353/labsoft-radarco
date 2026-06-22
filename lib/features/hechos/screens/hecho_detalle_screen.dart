@@ -585,49 +585,75 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // SELLO DE TRANSPARENCIA (Capa 2)
+                        // SELLO DE TRANSPARENCIA (Capa 2 · confianza de la foto)
                         if (widget.hecho.origenFoto != null) ...[
                           const SizedBox(height: 14),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: widget.hecho.origenFoto == 'en_vivo'
-                                  ? Colors.green[50]
-                                  : Colors.amber[50],
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  widget.hecho.origenFoto == 'en_vivo'
-                                      ? Icons.photo_camera_rounded
-                                      : Icons.info_outline_rounded,
-                                  size: 16,
-                                  color: widget.hecho.origenFoto == 'en_vivo'
-                                      ? Colors.green[700]
-                                      : Colors.amber[800],
+                          Builder(
+                            builder: (context) {
+                              final enVivo =
+                                  widget.hecho.origenFoto == 'en_vivo';
+                              final MaterialColor base = enVivo
+                                  ? Colors.green
+                                  : Colors.orange;
+                              return Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
                                 ),
-                                const SizedBox(width: 8),
-                                Flexible(
-                                  child: Text(
-                                    widget.hecho.origenFoto == 'en_vivo'
-                                        ? 'Foto tomada en el lugar'
-                                        : 'Imagen adjunta · reporte a distancia',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                      color:
-                                          widget.hecho.origenFoto == 'en_vivo'
-                                          ? Colors.green[800]
-                                          : Colors.amber[900],
+                                decoration: BoxDecoration(
+                                  color: base[50],
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: base[200]!),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      enVivo
+                                          ? Icons.verified_rounded
+                                          : Icons.gpp_maybe_rounded,
+                                      size: 16,
+                                      color: enVivo
+                                          ? Colors.green[700]
+                                          : Colors.orange[800],
                                     ),
-                                  ),
+                                    const SizedBox(width: 8),
+                                    Flexible(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            enVivo
+                                                ? 'Foto tomada en el lugar'
+                                                : 'Foto cargada · no verificada en el lugar',
+                                            style: TextStyle(
+                                              fontSize: 12.5,
+                                              fontWeight: FontWeight.w800,
+                                              color: enVivo
+                                                  ? Colors.green[800]
+                                                  : Colors.orange[900],
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            enVivo
+                                                ? 'Capturada en vivo desde la app. Máxima confianza.'
+                                                : 'Reporte a distancia. Su confianza depende de la validación de la comunidad.',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              height: 1.3,
+                                              color: Colors.blueGrey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
+                              );
+                            },
                           ),
                         ],
                         const SizedBox(height: 20),

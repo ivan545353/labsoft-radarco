@@ -14,6 +14,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../core/utils/geofence_caleta_olivia.dart';
 import 'hecho_detalle_screen.dart';
 import 'dart:convert';
+import '../../../core/utils/exif_foto_service.dart';
 
 // Kill switch para no gastar cuota de Gemini en pruebas masivas.
 // Ponelo en true para la demo / uso normal.
@@ -65,6 +66,8 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
   // --- CONFIANZA DEL DATO (Capas 1 y 2) ---
   // Origen de la foto: 'en_vivo' (cámara, en el lugar) | 'adjuntada' (galería, remoto)
   String? _origenFoto;
+  // EXIF de la última foto adjuntada (solo aplica a reportes a distancia).
+  ResultadoExif? _exifFoto;
   // Capa 1: atestación obligatoria del usuario antes de publicar.
   bool _aceptoAtestacion = false;
 
@@ -87,6 +90,14 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
       _ubicacionElegida.longitude,
     );
     return distancia > 80; // metros
+  }
+
+  // ¿La foto adjuntada (remota) es verificable por metadatos?
+  // = tiene fecha EXIF y fue tomada hace ≤ 24 h. (puntos 3, 4 y 5)
+  bool get _fotoRemotaVerificable {
+    final exif = _exifFoto;
+    if (exif == null || !exif.tieneFecha) return false;
+    return exif.esMasViejaQue(horas: 24) == false;
   }
 
   bool _obteniendoUbicacion = true;
@@ -251,6 +262,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
       setState(() {
         _imagenSeleccionada = File(pickedFile.path);
         _origenFoto = 'en_vivo';
+        _exifFoto = null; // captura en vivo: no aplica verificación EXIF
         _errorFormulario = null;
       });
       _analizarFotoConIA();
@@ -263,64 +275,56 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
       source: ImageSource.gallery,
       imageQuality: 80,
       maxWidth: 1200,
+      requestFullMetadata:
+          true, // iOS: conservar EXIF (en Android es best-effort)
     );
 
-    if (pickedFile != null && mounted) {
-      setState(() {
-        _imagenSeleccionada = File(pickedFile.path);
-        _origenFoto = 'adjuntada';
-        _errorFormulario = null;
-      });
-      _analizarFotoConIA();
-    }
-  }
+    if (pickedFile == null || !mounted) return;
 
-  // En el lugar -> cámara directa. A distancia -> dejamos elegir cámara o galería.
-  void _seleccionarFoto() {
-    if (!_esReporteRemoto) {
-      _tomarFoto();
+    final archivo = File(pickedFile.path);
+
+    // Leemos metadatos para certificar la foto (SEÑAL, no prueba).
+    final exif = await ExifFotoService.leerDesdeArchivo(archivo);
+
+    // GATE DURO (punto 5): si la foto trae fecha y supera las 24 h, se rechaza.
+    if (exif.esMasViejaQue(horas: 24) == true) {
+      final horas = DateTime.now().difference(exif.fechaOriginal!).inHours;
+      final cuando = horas >= 48
+          ? 'hace ${(horas / 24).floor()} días'
+          : 'hace $horas horas';
+      if (!mounted) return;
+      setState(() {
+        _imagenSeleccionada = null;
+        _origenFoto = null;
+        _exifFoto = null;
+        _resultadoIA = null;
+        _aceptoAtestacion = false;
+        _errorFormulario =
+            'Esa foto fue tomada $cuando. Para reportes a distancia la imagen '
+            'no puede tener más de 1 día de antigüedad.';
+      });
       return;
     }
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const Icon(
-                Icons.camera_alt_rounded,
-                color: AppColors.azulPrimario,
-              ),
-              title: const Text('Tomar foto ahora'),
-              onTap: () {
-                Navigator.pop(context);
-                _tomarFoto();
-              },
-            ),
-            ListTile(
-              leading: const Icon(
-                Icons.photo_library_rounded,
-                color: AppColors.azulPrimario,
-              ),
-              title: const Text('Elegir de la galería'),
-              subtitle: const Text('Para reportar un lugar donde no estás'),
-              onTap: () {
-                Navigator.pop(context);
-                _elegirDeGaleria();
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
+    if (!mounted) return;
+    setState(() {
+      _imagenSeleccionada = archivo;
+      _origenFoto = 'adjuntada';
+      _exifFoto = exif; // alimenta el sello de verificación (verificable / no)
+      _errorFormulario = null;
+    });
+    _analizarFotoConIA();
+  }
+
+  // En el lugar -> cámara directa. A distancia -> dejamos elegir cámara o galería.
+  // Punto 2: en reportes a distancia, SOLO galería (sin cámara).
+  // En el lugar: cámara en vivo (máxima confianza).
+  void _seleccionarFoto() {
+    if (_esReporteRemoto) {
+      _elegirDeGaleria();
+    } else {
+      _tomarFoto();
+    }
   }
 
   Future<String?> _subirImagenASupabase(
@@ -1339,6 +1343,89 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
     );
   }
 
+  // Sello que comunica el nivel de confianza de la foto (puntos 4 y 7).
+  Widget _selloVerificacionFoto() {
+    if (_origenFoto == null) return const SizedBox.shrink();
+
+    // En vivo: máxima confianza.
+    if (_origenFoto == 'en_vivo') {
+      return _chipVerificacion(
+        icono: Icons.verified_rounded,
+        color: AppColors.exito,
+        titulo: 'Foto tomada en el lugar',
+        detalle: 'Máxima confianza: capturada en vivo desde la app.',
+      );
+    }
+
+    // Adjuntada (remoto) y verificable por metadatos.
+    if (_fotoRemotaVerificable) {
+      return _chipVerificacion(
+        icono: Icons.gpp_good_rounded,
+        color: AppColors.azulPrimario,
+        titulo: 'Foto reciente verificada',
+        detalle:
+            'Los metadatos confirman que se tomó hace menos de 24 h con una cámara.',
+      );
+    }
+
+    // Adjuntada (remoto) NO verificable -> downgrade visible (se permite igual).
+    return _chipVerificacion(
+      icono: Icons.gpp_maybe_rounded,
+      color: Colors.orange[700]!,
+      titulo: 'Foto cargada · no verificada en el lugar',
+      detalle:
+          'No pudimos confirmar cuándo se tomó. Tu reporte se publicará con menor '
+          'nivel de confianza. Confirmá abajo que es verídico.',
+    );
+  }
+
+  Widget _chipVerificacion({
+    required IconData icono,
+    required Color color,
+    required String titulo,
+    required String detalle,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icono, size: 18, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  titulo,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13.5,
+                    color: Colors.blueGrey[900],
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  detalle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.blueGrey[600],
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPaso3() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1391,7 +1478,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         const SizedBox(height: 6),
         Text(
           _esReporteRemoto
-              ? 'Reporte a distancia: podés tomar una foto o adjuntar una de tu galería que muestre el lugar.'
+              ? 'Reporte a distancia: cargá una foto de tu galería, tomada hace menos de 1 día, que muestre el lugar.'
               : 'Una imagen vale más que mil palabras. Asegúrate de mostrar claramente el reporte.',
           style: TextStyle(color: Colors.blueGrey[400], fontSize: 20),
         ),
@@ -1462,8 +1549,10 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
                               ),
                             ],
                           ),
-                          child: const Icon(
-                            Icons.camera_alt_rounded,
+                          child: Icon(
+                            _esReporteRemoto
+                                ? Icons.photo_library_rounded
+                                : Icons.camera_alt_rounded,
                             color: AppColors.azulPrimario,
                             size: 40,
                           ),
@@ -1471,7 +1560,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
                         const SizedBox(height: 16),
                         Text(
                           _esReporteRemoto
-                              ? 'Tocar para tomar o adjuntar una foto'
+                              ? 'Tocar para elegir una foto de tu galería'
                               : 'Tocar para abrir la cámara',
                           style: TextStyle(
                             color: Colors.blueGrey[600],
@@ -1486,31 +1575,10 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         ),
         const SizedBox(height: 16),
 
-        // SELLO DE ORIGEN DE LA FOTO (Capa 2: transparencia)
+        // SELLO DE VERIFICACIÓN (origen + metadatos EXIF)
         if (_origenFoto != null) ...[
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Icon(
-                _origenFoto == 'en_vivo'
-                    ? Icons.photo_camera_rounded
-                    : Icons.collections_rounded,
-                size: 16,
-                color: Colors.blueGrey[500],
-              ),
-              const SizedBox(width: 8),
-              Text(
-                _origenFoto == 'en_vivo'
-                    ? 'Foto tomada en el lugar'
-                    : 'Imagen adjunta (reporte a distancia)',
-                style: TextStyle(
-                  color: Colors.blueGrey[500],
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
+          _selloVerificacionFoto(),
         ],
 
         const SizedBox(height: 16),

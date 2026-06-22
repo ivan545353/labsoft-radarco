@@ -843,7 +843,9 @@ class HechoCard extends StatelessWidget {
                               vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.55),
+                              color: hecho.origenFoto == 'en_vivo'
+                                  ? Colors.black.withOpacity(0.55)
+                                  : Colors.orange[900]!.withOpacity(0.78),
                               borderRadius: BorderRadius.circular(100),
                             ),
                             child: Row(
@@ -852,7 +854,7 @@ class HechoCard extends StatelessWidget {
                                 Icon(
                                   hecho.origenFoto == 'en_vivo'
                                       ? Icons.photo_camera_rounded
-                                      : Icons.info_outline_rounded,
+                                      : Icons.gpp_maybe_rounded,
                                   size: 13,
                                   color: Colors.white,
                                 ),
@@ -860,7 +862,7 @@ class HechoCard extends StatelessWidget {
                                 Text(
                                   hecho.origenFoto == 'en_vivo'
                                       ? 'En el lugar'
-                                      : 'Imagen adjunta',
+                                      : 'Sin verificar en el lugar',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 11,
