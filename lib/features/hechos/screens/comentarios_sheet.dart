@@ -9,6 +9,30 @@ import '../../usuarios/screens/perfil_usuario_screen.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../auth/controllers/usuario_controller.dart';
 
+// Formato de fecha/hora localizado es-AR sin dependencias externas.
+// Ej.: "12 jun 2026, 14:30". Usa hora local del dispositivo.
+const List<String> _mesesEsAr = [
+  'ene',
+  'feb',
+  'mar',
+  'abr',
+  'may',
+  'jun',
+  'jul',
+  'ago',
+  'sep',
+  'oct',
+  'nov',
+  'dic',
+];
+
+String _formatearFechaHora(DateTime fecha) {
+  final f = fecha.toLocal();
+  final hh = f.hour.toString().padLeft(2, '0');
+  final mm = f.minute.toString().padLeft(2, '0');
+  return '${f.day} ${_mesesEsAr[f.month - 1]} ${f.year}, $hh:$mm';
+}
+
 class ComentariosSheet extends StatefulWidget {
   final String hechoId;
   final String autorHechoId;
@@ -870,6 +894,15 @@ class _ItemComentarioState extends State<_ItemComentario> {
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _formatearFechaHora(widget.comentario.creadoEn),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.blueGrey[400],
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                     const SizedBox(height: 4),
 

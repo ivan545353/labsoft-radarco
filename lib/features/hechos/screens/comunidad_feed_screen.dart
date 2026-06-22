@@ -790,6 +790,32 @@ class HechoCard extends StatelessWidget {
                         ? TextOverflow.visible
                         : TextOverflow.ellipsis,
                   ),
+                  if (hecho.direccion != null &&
+                      hecho.direccion!.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.place_outlined,
+                          size: 14,
+                          color: Colors.blueGrey[400],
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            hecho.direccion!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.blueGrey[500],
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),

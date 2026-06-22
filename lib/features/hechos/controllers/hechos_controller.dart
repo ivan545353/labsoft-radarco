@@ -128,8 +128,28 @@ class HechosController extends ChangeNotifier {
     }
   }
 
-  // --- INTERCEPTOR DE DUPLICADOS (interceptor blando) ---
-  static const double kRadioDuplicadoMetros = 40;
+  // --- INTERCEPTOR DE DUPLICADOS ---
+
+  // Punto 6: el radio depende de la categoría.
+  // Puntos concretos (un bache, un poste) -> radio chico.
+  // Áreas difusas (inseguridad, anegamiento) -> radio más amplio.
+  // Valores configurables.
+  static const double _radioDuplicadoDefault = 40;
+  static const Map<String, double> _radioDuplicadoPorCategoria = {
+    'bache': 25,
+    'luminaria': 25,
+    'basura': 30,
+    'agua / caño': 40,
+    'accidente': 40,
+    'obstrucción': 40,
+    'inseguridad': 75,
+    'otro': 40,
+  };
+
+  double _radioParaCategoria(String categoriaLabel) {
+    return _radioDuplicadoPorCategoria[categoriaLabel.trim().toLowerCase()] ??
+        _radioDuplicadoDefault;
+  }
 
   // Extrae la etiqueta de categoría ([Bache] - ...) o cae al tipo backend.
   String _extraerCategoriaLabel(HechoModel h) {
@@ -139,26 +159,68 @@ class HechosController extends ChangeNotifier {
     return h.tipoHecho == 'problema' ? 'Problema' : 'Alerta';
   }
 
-  // Devuelve el hecho activo más cercano (misma categoría, < 40 m) o null.
-  HechoModel? detectarDuplicado(String categoriaLabel, double lat, double lng) {
+  // Escáner genérico: hecho activo más cercano de la misma categoría dentro
+  // del radio de esa categoría. Filtra por dueño según los parámetros.
+  HechoModel? _buscarHechoCercano(
+    String categoriaLabel,
+    double lat,
+    double lng, {
+    String? soloDeCiudadano, // si != null: solo hechos de este ciudadano
+    String? excluirCiudadano, // si != null: ignora hechos de este ciudadano
+  }) {
+    final radio = _radioParaCategoria(categoriaLabel);
+    final objetivo = categoriaLabel.trim().toLowerCase();
+
     HechoModel? masCercano;
     double distanciaMin = double.infinity;
 
     for (final h in _hechosActivos) {
       if (h.estado != 'activo') continue;
       if (h.tipoHecho != 'problema' && h.tipoHecho != 'alerta') continue;
-      if (_extraerCategoriaLabel(h).toLowerCase() !=
-          categoriaLabel.trim().toLowerCase()) {
+      if (_extraerCategoriaLabel(h).toLowerCase() != objetivo) continue;
+      if (soloDeCiudadano != null && h.ciudadanoId != soloDeCiudadano) continue;
+      if (excluirCiudadano != null && h.ciudadanoId == excluirCiudadano) {
         continue;
       }
 
       final d = Geolocator.distanceBetween(lat, lng, h.latitud, h.longitud);
-      if (d <= kRadioDuplicadoMetros && d < distanciaMin) {
+      if (d <= radio && d < distanciaMin) {
         distanciaMin = d;
         masCercano = h;
       }
     }
     return masCercano;
+  }
+
+  // Duplicado de OTRO vecino -> dispara el flujo "es lo mismo / es distinto".
+  // Punto 11: excluye los reportes del propio usuario.
+  HechoModel? detectarDuplicado(
+    String categoriaLabel,
+    double lat,
+    double lng, {
+    String? miCiudadanoId,
+  }) {
+    return _buscarHechoCercano(
+      categoriaLabel,
+      lat,
+      lng,
+      excluirCiudadano: miCiudadanoId,
+    );
+  }
+
+  // Punto 11: duplicado del PROPIO usuario (no se le ofrece sumar confirmación).
+  HechoModel? detectarDuplicadoPropio(
+    String categoriaLabel,
+    double lat,
+    double lng,
+    String miCiudadanoId,
+  ) {
+    return _buscarHechoCercano(
+      categoriaLabel,
+      lat,
+      lng,
+      soloDeCiudadano: miCiudadanoId,
+    );
   }
 
   // El usuario confirmó que su reporte es el mismo que [original]:

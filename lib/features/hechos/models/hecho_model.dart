@@ -12,6 +12,9 @@ class HechoModel {
   // Capa 2 (transparencia): cómo se obtuvo la foto -> 'en_vivo' | 'adjuntada'
   final String? origenFoto;
 
+  // Punto 8: dirección legible resuelta por geocodificación inversa al crear.
+  final String? direccion;
+
   // Datos del autor (Join)
   final String? nombreAutor;
   final String? avatarAutor;
@@ -32,6 +35,7 @@ class HechoModel {
     required this.creadoEn,
     this.descripcion,
     this.origenFoto,
+    this.direccion,
     this.nombreAutor,
     this.avatarAutor,
     this.reputacionAutor,
@@ -51,6 +55,7 @@ class HechoModel {
       creadoEn: DateTime.parse(json['creado_en']),
       descripcion: json['descripcion'],
       origenFoto: json['origen_foto'],
+      direccion: json['direccion'],
       nombreAutor: json['nombre_autor'],
       avatarAutor: json['avatar_autor'],
       reputacionAutor: json['reputacion_autor'] != null
@@ -75,6 +80,7 @@ class HechoModel {
       'estado': estado,
       'descripcion': descripcion,
       'origen_foto': origenFoto,
+      'direccion': direccion,
     };
   }
 }

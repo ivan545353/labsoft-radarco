@@ -712,6 +712,30 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                           ),
                         ),
 
+                        if (widget.hecho.direccion != null &&
+                            widget.hecho.direccion!.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.place_outlined,
+                                size: 18,
+                                color: AppColors.azulPrimario,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  widget.hecho.direccion!,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.blueGrey[600],
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                         const SizedBox(height: 20),
 
                         // Estado Visual Rápido Relativo

@@ -369,6 +369,42 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
     }
   }
 
+  // Punto 8: geocodificación inversa UNA sola vez, al publicar.
+  // Si falla, devolvemos null y el reporte se publica igual (sin dirección).
+  Future<String?> _resolverDireccion(LatLng punto) async {
+    try {
+      final marcas = await placemarkFromCoordinates(
+        punto.latitude,
+        punto.longitude,
+      );
+      if (marcas.isEmpty) return null;
+      final p = marcas.first;
+
+      final calle = (p.thoroughfare ?? '').trim();
+      final altura = (p.subThoroughfare ?? '').trim();
+      final street = (p.street ?? '').trim();
+
+      String principal;
+      if (calle.isNotEmpty) {
+        principal = altura.isNotEmpty ? '$calle $altura' : calle;
+      } else {
+        principal = street;
+      }
+
+      final barrio = (p.subLocality ?? '').trim();
+      final partes = <String>[
+        if (principal.isNotEmpty) principal,
+        if (barrio.isNotEmpty && barrio != principal) barrio,
+      ];
+
+      if (partes.isEmpty) return null;
+      return partes.join(', ');
+    } catch (e) {
+      debugPrint('No se pudo geocodificar la dirección: $e');
+      return null;
+    }
+  }
+
   void _enviarReporte() async {
     if (_categoriaSeleccionada == null) {
       setState(() => _errorFormulario = 'Por favor, selecciona una categoría.');
@@ -399,13 +435,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
       );
       return;
     }
-    if (!_aceptoAtestacion) {
-      setState(
-        () => _errorFormulario =
-            'Debés confirmar que la imagen corresponde al lugar marcado.',
-      );
-      return;
-    }
+
     // Última barrera de seguridad: el punto elegido debe estar dentro del ejido.
     if (!estaDentroDeCaletaOlivia(_ubicacionElegida)) {
       setState(
@@ -437,32 +467,56 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         debugPrint('Aviso: No se pudo traducir el ID. Usando original. $err');
       }
 
-      // --- INTERCEPTOR BLANDO DE DUPLICADOS ---
-      // Detección en memoria: misma categoría, < 40 m, hecho activo.
+      // --- INTERCEPTOR DE DUPLICADOS ---
+
+      // Punto 11: ¿el usuario ya tiene un reporte PROPIO parecido acá?
+      // Punto 11 + antispam: el duplicado PROPIO es un freno duro.
+      // No se publica; la única salida es ver el reporte que ya existe.
+      final propioPrevio = widget.controller.detectarDuplicadoPropio(
+        _categoriaSeleccionada!.nombre,
+        _ubicacionElegida.latitude,
+        _ubicacionElegida.longitude,
+        ciudadanoIdReal,
+      );
+
+      if (propioPrevio != null) {
+        if (!mounted) return;
+        setState(() => _subiendoDatos = false);
+        final verlo = await _mostrarHojaDuplicadoPropio(propioPrevio);
+        if (verlo == 'ver' && mounted) {
+          final navigator = Navigator.of(context);
+          navigator.pop(); // cierra la hoja de nuevo reporte
+          navigator.push(
+            MaterialPageRoute(
+              builder: (_) => HechoDetalleScreen(
+                hecho: propioPrevio,
+                controller: widget.controller,
+              ),
+            ),
+          );
+        }
+        return; // nunca publicamos un duplicado propio
+      }
+
+      // Interceptor blando: duplicado de OTRO vecino (flujo "es lo mismo").
       final hechoOriginal = widget.controller.detectarDuplicado(
         _categoriaSeleccionada!.nombre,
         _ubicacionElegida.latitude,
         _ubicacionElegida.longitude,
+        miCiudadanoId: ciudadanoIdReal,
       );
 
       if (hechoOriginal != null) {
         if (!mounted) return;
-        setState(
-          () => _subiendoDatos = false,
-        ); // pausa el spinner mientras decide
+        setState(() => _subiendoDatos = false);
 
         final decision = await _mostrarHojaDuplicado(hechoOriginal);
 
-        // Canceló (tocó fuera): no hacemos nada, sus datos quedan en el formulario.
         if (decision == null) return;
-
-        // Confirmó que es el mismo hecho -> sumamos su aporte al original.
         if (decision == 'mismo') {
           await _confirmarDuplicado(hechoOriginal, ciudadanoIdReal);
           return;
         }
-
-        // Eligió "es un hecho distinto" -> seguimos publicando normalmente.
         if (!mounted) return;
         setState(() => _subiendoDatos = true);
       }
@@ -475,6 +529,9 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
 
       if (urlFotoReal == null)
         throw Exception('Fallo la subida al Storage de imágenes de Supabase.');
+
+      // Punto 8: resolvemos la dirección legible (no bloquea si falla).
+      final direccionLegible = await _resolverDireccion(_ubicacionElegida);
 
       // 4. ARMAR EL MODELO DEFINITIVO
       final descripcionFinal =
@@ -491,6 +548,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         creadoEn: DateTime.now(),
         descripcion: descripcionFinal,
         origenFoto: _origenFoto ?? 'en_vivo',
+        direccion: direccionLegible,
       );
 
       // 5. PUBLICAR
@@ -518,11 +576,101 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
     } catch (e) {
       debugPrint('⚠️ ERROR CRÍTICO: $e');
       if (!mounted) return;
+      final msg = e.toString();
+      String amigable;
+      if (msg.contains('SPAM_RATE')) {
+        amigable = 'Esperá unos segundos antes de publicar otro reporte.';
+      } else if (msg.contains('SPAM_HORA')) {
+        amigable = 'Llegaste al máximo de reportes por hora. Probá más tarde.';
+      } else if (msg.contains('SPAM_DUP')) {
+        amigable = 'Ya tenés un reporte parecido muy cerca de este punto.';
+      } else {
+        amigable = 'No pudimos publicar el reporte. Reintentá en un momento.';
+      }
       setState(() {
         _subiendoDatos = false;
-        _errorFormulario = 'DEBUG SQL: ${e.toString()}';
+        _errorFormulario = amigable;
       });
     }
+  }
+
+  // Punto 11: hoja MÍNIMA cuando el duplicado es del propio usuario.
+  // Sin flujo "sumar confirmación" (no aplica sobre uno mismo).
+  // Devuelve 'ver', 'publicar' o null.
+  Future<String?> _mostrarHojaDuplicadoPropio(HechoModel propio) async {
+    final distancia = Geolocator.distanceBetween(
+      _ubicacionElegida.latitude,
+      _ubicacionElegida.longitude,
+      propio.latitud,
+      propio.longitud,
+    ).round();
+
+    final match = RegExp(r'^\[(.*?)\] - ').firstMatch(propio.descripcion ?? '');
+    final categoria = match?.group(1) ?? 'reporte';
+
+    if (!mounted) return null;
+
+    return showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Ya reportaste algo parecido acá',
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.blueGrey[900],
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'A $distancia m tenés un "$categoria" activo.',
+                style: TextStyle(color: Colors.blueGrey[500], fontSize: 14),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, 'ver'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.azulPrimario,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: const Text(
+                    'Ver mi reporte',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   // --- INTERCEPTOR BLANDO: hoja de desambiguación ---
@@ -1835,7 +1983,9 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
                             child: ElevatedButton(
                               onPressed:
                                   (_subiendoDatos ||
-                                      (_pasoActual == 4 && _bloqueadoPorIA))
+                                      (_pasoActual == 4 &&
+                                          (_bloqueadoPorIA ||
+                                              !_aceptoAtestacion)))
                                   ? null
                                   : (_pasoActual == 4
                                         ? _enviarReporte
