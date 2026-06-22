@@ -31,6 +31,10 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
     });
   }
 
+  Future<void> _refrescarNotificaciones() async {
+    await widget.controller.cargarNotificaciones();
+  }
+
   // --- LÓGICA MAESTRA DE NAVEGACIÓN ---
   Future<void> _procesarToqueNotificacion(
     NotificacionModel notificacion, {
@@ -292,28 +296,46 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
                   ),
                 )
               : notificaciones.isEmpty
-              ? _buildEstadoVacio()
-              : ListView(
-                  physics: const BouncingScrollPhysics(),
-                  children: [
-                    if (grupos['Hoy']!.isNotEmpty) ...[
-                      _buildEncabezadoGrupo('Hoy'),
-                      ...grupos['Hoy']!.map((n) => _buildItemNotificacion(n)),
+              ? RefreshIndicator(
+                  onRefresh: _refrescarNotificaciones,
+                  color: AppColors.azulPrimario,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [
+                      SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.18,
+                      ),
+                      _buildEstadoVacio(),
                     ],
-                    if (grupos['Ayer']!.isNotEmpty) ...[
-                      _buildEncabezadoGrupo('Ayer'),
-                      ...grupos['Ayer']!.map((n) => _buildItemNotificacion(n)),
-                    ],
-                    if (grupos['Anteriores']!.isNotEmpty) ...[
-                      _buildEncabezadoGrupo('Anteriores'),
-                      ...grupos['Anteriores']!.map(
-                        (n) => _buildItemNotificacion(n),
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: _refrescarNotificaciones,
+                  color: AppColors.azulPrimario,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [
+                      if (grupos['Hoy']!.isNotEmpty) ...[
+                        _buildEncabezadoGrupo('Hoy'),
+                        ...grupos['Hoy']!.map((n) => _buildItemNotificacion(n)),
+                      ],
+                      if (grupos['Ayer']!.isNotEmpty) ...[
+                        _buildEncabezadoGrupo('Ayer'),
+                        ...grupos['Ayer']!.map(
+                          (n) => _buildItemNotificacion(n),
+                        ),
+                      ],
+                      if (grupos['Anteriores']!.isNotEmpty) ...[
+                        _buildEncabezadoGrupo('Anteriores'),
+                        ...grupos['Anteriores']!.map(
+                          (n) => _buildItemNotificacion(n),
+                        ),
+                      ],
+                      SizedBox(
+                        height: 120 + MediaQuery.of(context).padding.bottom,
                       ),
                     ],
-                    SizedBox(
-                      height: 120 + MediaQuery.of(context).padding.bottom,
-                    ),
-                  ],
+                  ),
                 ),
         );
       },

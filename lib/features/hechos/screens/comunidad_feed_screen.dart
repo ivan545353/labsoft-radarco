@@ -65,6 +65,11 @@ class _ComunidadFeedScreenState extends State<ComunidadFeedScreen> {
     }
   }
 
+  Future<void> _refrescarFeed() async {
+    await widget.controlador.cargarHechos();
+    if (mounted) setState(() => _itemsVisibles = _tamanoPagina);
+  }
+
   void _abrirPanelFiltrosAvanzados() {
     showModalBottomSheet(
       context: context,
@@ -306,232 +311,241 @@ class _ComunidadFeedScreenState extends State<ComunidadFeedScreen> {
 
         return Container(
           color: const Color(0xFFF4F7FB),
-          child: CustomScrollView(
-            controller: _scrollController,
-            slivers: [
-              // CABECERA
-              SliverPadding(
-                padding: const EdgeInsets.only(
-                  top: 110,
-                  left: 24,
-                  right: 24,
-                  bottom: 16,
-                ),
-                sliver: SliverToBoxAdapter(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Descubre',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.azulPrimario.withOpacity(0.8),
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Caleta Olivia',
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.blueGrey[900],
-                          height: 1.1,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Explora el historial de reportes comunitarios.',
-                        style: TextStyle(
-                          color: Colors.blueGrey[500],
-                          fontSize: 15,
-                        ),
-                      ),
-                    ],
+          child: RefreshIndicator(
+            onRefresh: _refrescarFeed,
+            color: AppColors.azulPrimario,
+            edgeOffset: 110,
+            displacement: 40,
+            child: CustomScrollView(
+              controller: _scrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                // CABECERA
+                SliverPadding(
+                  padding: const EdgeInsets.only(
+                    top: 110,
+                    left: 24,
+                    right: 24,
+                    bottom: 16,
                   ),
-                ),
-              ),
-
-              // BARRA DE ACCESO RÁPIDO A CATEGORÍAS Y FILTROS
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: 50,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    // +1 para incluir el botón de filtros al inicio
-                    itemCount: _categorias.length + 1,
-                    itemBuilder: (context, index) {
-                      // Botón Avanzado (Siempre primero)
-                      if (index == 0) {
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 12.0),
-                          child: ActionChip(
-                            avatar: Icon(
-                              Icons.tune_rounded,
-                              size: 18,
-                              color: filtrosActivosCount > 0
-                                  ? Colors.white
-                                  : AppColors.azulPrimario,
-                            ),
-                            label: Text(
-                              filtrosActivosCount > 0
-                                  ? 'Filtros ($filtrosActivosCount)'
-                                  : 'Filtros',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w800,
-                                color: filtrosActivosCount > 0
-                                    ? Colors.white
-                                    : AppColors.azulPrimario,
-                              ),
-                            ),
-                            backgroundColor: filtrosActivosCount > 0
-                                ? AppColors.azulPrimario
-                                : AppColors.azulPrimario.withOpacity(0.1),
-                            side: BorderSide.none,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            onPressed: _abrirPanelFiltrosAvanzados,
-                          ),
-                        );
-                      }
-
-                      // Categorías Rápidas
-                      final categoria = _categorias[index - 1];
-                      final isSelected = _filtroCategoria == categoria;
-
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8.0),
-                        child: ChoiceChip(
-                          label: Text(
-                            categoria,
-                            style: TextStyle(
-                              fontWeight: isSelected
-                                  ? FontWeight.w800
-                                  : FontWeight.w600,
-                              color: isSelected
-                                  ? Colors.white
-                                  : Colors.blueGrey[600],
-                              fontSize: 13,
-                            ),
-                          ),
-                          selected: isSelected,
-                          onSelected: (selected) {
-                            if (selected)
-                              setState(() => _filtroCategoria = categoria);
-                          },
-                          backgroundColor: Colors.white,
-                          selectedColor: AppColors.azulPrimario,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            side: BorderSide(
-                              color: isSelected
-                                  ? AppColors.azulPrimario
-                                  : Colors.blueGrey[100]!,
-                              width: 1.5,
-                            ),
-                          ),
-                          elevation: isSelected ? 4 : 0,
-                          shadowColor: AppColors.azulPrimario.withOpacity(0.4),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-
-              const SliverPadding(padding: EdgeInsets.only(bottom: 24)),
-
-              // ESTADO VACÍO MULTI-FILTRO
-              if (hechosFiltrados.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
+                  sliver: SliverToBoxAdapter(
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 20,
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            Icons.manage_search_rounded,
-                            size: 60,
-                            color: Colors.blueGrey[200],
+                        Text(
+                          'Descubre',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.azulPrimario.withOpacity(0.8),
+                            letterSpacing: 1.2,
                           ),
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 4),
                         Text(
-                          'Sin resultados',
+                          'Caleta Olivia',
                           style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blueGrey[800],
+                            fontSize: 32,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.blueGrey[900],
+                            height: 1.1,
                           ),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'No hay reportes que coincidan con estos filtros.',
-                          style: TextStyle(color: Colors.blueGrey[400]),
-                        ),
-                        const SizedBox(height: 16),
-                        TextButton.icon(
-                          onPressed: () {
-                            setState(() {
-                              _filtroEstado = 'Todos';
-                              _filtroTiempo = 'Siempre';
-                              _filtroCategoria = 'Todas';
-                            });
-                          },
-                          icon: const Icon(Icons.clear_all_rounded),
-                          label: const Text('Limpiar todos los filtros'),
+                          'Explora el historial de reportes comunitarios.',
+                          style: TextStyle(
+                            color: Colors.blueGrey[500],
+                            fontSize: 15,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                )
-              // LISTA DE TARJETAS
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.only(
-                    left: 20,
-                    right: 20,
-                    bottom: 120,
-                  ),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) => HechoCard(
-                        hecho: hechosFiltrados[index],
-                        controlador: widget.controlador,
-                      ),
-                      childCount: _itemsVisibles < hechosFiltrados.length
-                          ? _itemsVisibles
-                          : hechosFiltrados.length,
+                ),
+
+                // BARRA DE ACCESO RÁPIDO A CATEGORÍAS Y FILTROS
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 50,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      // +1 para incluir el botón de filtros al inicio
+                      itemCount: _categorias.length + 1,
+                      itemBuilder: (context, index) {
+                        // Botón Avanzado (Siempre primero)
+                        if (index == 0) {
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 12.0),
+                            child: ActionChip(
+                              avatar: Icon(
+                                Icons.tune_rounded,
+                                size: 18,
+                                color: filtrosActivosCount > 0
+                                    ? Colors.white
+                                    : AppColors.azulPrimario,
+                              ),
+                              label: Text(
+                                filtrosActivosCount > 0
+                                    ? 'Filtros ($filtrosActivosCount)'
+                                    : 'Filtros',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  color: filtrosActivosCount > 0
+                                      ? Colors.white
+                                      : AppColors.azulPrimario,
+                                ),
+                              ),
+                              backgroundColor: filtrosActivosCount > 0
+                                  ? AppColors.azulPrimario
+                                  : AppColors.azulPrimario.withOpacity(0.1),
+                              side: BorderSide.none,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              onPressed: _abrirPanelFiltrosAvanzados,
+                            ),
+                          );
+                        }
+
+                        // Categorías Rápidas
+                        final categoria = _categorias[index - 1];
+                        final isSelected = _filtroCategoria == categoria;
+
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: ChoiceChip(
+                            label: Text(
+                              categoria,
+                              style: TextStyle(
+                                fontWeight: isSelected
+                                    ? FontWeight.w800
+                                    : FontWeight.w600,
+                                color: isSelected
+                                    ? Colors.white
+                                    : Colors.blueGrey[600],
+                                fontSize: 13,
+                              ),
+                            ),
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              if (selected)
+                                setState(() => _filtroCategoria = categoria);
+                            },
+                            backgroundColor: Colors.white,
+                            selectedColor: AppColors.azulPrimario,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                              side: BorderSide(
+                                color: isSelected
+                                    ? AppColors.azulPrimario
+                                    : Colors.blueGrey[100]!,
+                                width: 1.5,
+                              ),
+                            ),
+                            elevation: isSelected ? 4 : 0,
+                            shadowColor: AppColors.azulPrimario.withOpacity(
+                              0.4,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
-              if (_itemsVisibles < hechosFiltrados.length)
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
+
+                const SliverPadding(padding: EdgeInsets.only(bottom: 24)),
+
+                // ESTADO VACÍO MULTI-FILTRO
+                if (hechosFiltrados.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
                     child: Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.azulPrimario,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 20,
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              Icons.manage_search_rounded,
+                              size: 60,
+                              color: Colors.blueGrey[200],
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Text(
+                            'Sin resultados',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blueGrey[800],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'No hay reportes que coincidan con estos filtros.',
+                            style: TextStyle(color: Colors.blueGrey[400]),
+                          ),
+                          const SizedBox(height: 16),
+                          TextButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                _filtroEstado = 'Todos';
+                                _filtroTiempo = 'Siempre';
+                                _filtroCategoria = 'Todas';
+                              });
+                            },
+                            icon: const Icon(Icons.clear_all_rounded),
+                            label: const Text('Limpiar todos los filtros'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                // LISTA DE TARJETAS
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.only(
+                      left: 20,
+                      right: 20,
+                      bottom: 120,
+                    ),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => HechoCard(
+                          hecho: hechosFiltrados[index],
+                          controlador: widget.controlador,
+                        ),
+                        childCount: _itemsVisibles < hechosFiltrados.length
+                            ? _itemsVisibles
+                            : hechosFiltrados.length,
                       ),
                     ),
                   ),
-                ),
-            ],
+                if (_itemsVisibles < hechosFiltrados.length)
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.azulPrimario,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         );
       },

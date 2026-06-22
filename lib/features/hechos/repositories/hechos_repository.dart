@@ -87,11 +87,17 @@ class HechosRepository {
     tipoInteraccion, // 'upvote', 'sigue_pasando', o 'ya_se_resolvio'
   }) async {
     try {
-      await _supabase.from('interacciones_comunidad').insert({
-        'hecho_id': hechoId,
-        'ciudadano_id': ciudadanoId,
-        'tipo_interaccion': tipoInteraccion,
-      });
+      await _supabase
+          .from('interacciones_comunidad')
+          .upsert(
+            {
+              'hecho_id': hechoId,
+              'ciudadano_id': ciudadanoId,
+              'tipo_interaccion': tipoInteraccion,
+            },
+            onConflict: 'hecho_id,ciudadano_id,tipo_interaccion',
+            ignoreDuplicates: true,
+          );
     } catch (e) {
       throw Exception('Error al registrar la interacción: $e');
     }
