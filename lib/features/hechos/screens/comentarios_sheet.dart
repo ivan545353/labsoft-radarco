@@ -5,6 +5,9 @@ import '../../../core/theme/app_colors.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../usuarios/screens/perfil_usuario_screen.dart';
+import '../../auth/controllers/auth_controller.dart';
+import '../../auth/controllers/usuario_controller.dart';
 
 class ComentariosSheet extends StatefulWidget {
   final String hechoId;
@@ -656,6 +659,21 @@ class _ItemComentarioState extends State<_ItemComentario> {
     }
   }
 
+  void _verPerfilComentarista() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PerfilUsuarioScreen(
+          authController: AuthController(),
+          usuarioController: UsuarioController(),
+          hechosController: widget.controller,
+          esPerfilPropio: false,
+          usuarioIdVisualizado: widget.comentario.ciudadanoId,
+        ),
+      ),
+    );
+  }
+
   void _mostrarOpcionesModeracion(BuildContext parentContext) {
     showModalBottomSheet(
       context: parentContext,
@@ -786,19 +804,22 @@ class _ItemComentarioState extends State<_ItemComentario> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Avatar
-              CircleAvatar(
-                radius: avatarSize,
-                backgroundColor: Colors.blueGrey[50],
-                backgroundImage: widget.comentario.avatarAutor != null
-                    ? NetworkImage(widget.comentario.avatarAutor!)
-                    : null,
-                child: widget.comentario.avatarAutor == null
-                    ? Icon(
-                        Icons.person,
-                        size: avatarSize,
-                        color: Colors.blueGrey[300],
-                      )
-                    : null,
+              GestureDetector(
+                onTap: _verPerfilComentarista,
+                child: CircleAvatar(
+                  radius: avatarSize,
+                  backgroundColor: Colors.blueGrey[50],
+                  backgroundImage: widget.comentario.avatarAutor != null
+                      ? NetworkImage(widget.comentario.avatarAutor!)
+                      : null,
+                  child: widget.comentario.avatarAutor == null
+                      ? Icon(
+                          Icons.person,
+                          size: avatarSize,
+                          color: Colors.blueGrey[300],
+                        )
+                      : null,
+                ),
               ),
               const SizedBox(width: 12),
 

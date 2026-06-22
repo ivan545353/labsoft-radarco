@@ -7,6 +7,9 @@ import '../../auth/controllers/auth_controller.dart';
 import '../../auth/controllers/usuario_controller.dart';
 import '../../hechos/controllers/hechos_controller.dart';
 import '../../../core/utils/catalogo_recompensas.dart'; // Importar catálogo
+import '../../hechos/models/hecho_model.dart';
+import '../../hechos/screens/hecho_detalle_screen.dart';
+import '../../auth/models/usuario_model.dart';
 
 // --- MODELO: LOGROS EVOLUTIVOS ---
 class TierLogro {
@@ -73,6 +76,8 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
   int _totalProblemasResueltos = 0;
   int _totalConfirmaciones = 0;
   int _totalComentarios = 0;
+  UsuarioModel? _perfilVisualizado;
+  bool _cargandoVisualizado = false;
 
   final Color _bronce = const Color(0xFFCD7F32);
   final Color _plata = const Color(0xFF90A4AE);
@@ -83,6 +88,9 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
   void initState() {
     super.initState();
     _cargarDatosDePantalla();
+    if (!widget.esPerfilPropio && widget.usuarioIdVisualizado != null) {
+      _cargarPerfilVisualizado();
+    }
   }
 
   void _cargarDatosDePantalla() {
@@ -90,6 +98,18 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
       widget.usuarioController.cargarPerfil();
     }
     _calcularEstadisticasDelUsuario();
+  }
+
+  Future<void> _cargarPerfilVisualizado() async {
+    setState(() => _cargandoVisualizado = true);
+    final p = await widget.usuarioController.obtenerPerfilPublico(
+      widget.usuarioIdVisualizado!,
+    );
+    if (!mounted) return;
+    setState(() {
+      _perfilVisualizado = p;
+      _cargandoVisualizado = false;
+    });
   }
 
   void _calcularEstadisticasDelUsuario() {
@@ -184,7 +204,12 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
         widget.hechosController,
       ]),
       builder: (context, child) {
-        final perfil = widget.usuarioController.perfilActual;
+        final perfil = widget.esPerfilPropio
+            ? widget.usuarioController.perfilActual
+            : _perfilVisualizado;
+        final idUsuarioMostrado = widget.esPerfilPropio
+            ? perfil?.id
+            : widget.usuarioIdVisualizado;
         final estaCargando = widget.usuarioController.estaCargando;
 
         // Recalculamos las estadísticas con los datos ya disponibles.
@@ -209,7 +234,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
 
         return Scaffold(
           backgroundColor: const Color(0xFFF4F7FB),
-          body: estaCargando
+          body: (estaCargando || _cargandoVisualizado)
               ? Center(child: CircularProgressIndicator(color: colorTema))
               : CustomScrollView(
                   physics: const BouncingScrollPhysics(),
@@ -457,7 +482,8 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                         ),
                       ),
                     ),
-
+                    // --- LISTA DE REPORTES DEL USUARIO ---
+                    _buildSeccionReportes(idFiltrar: idUsuarioMostrado),
                     // --- ZONA PRIVADA ---
                     if (widget.esPerfilPropio)
                       SliverPadding(
@@ -727,6 +753,193 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSeccionReportes({String? idFiltrar}) {
+    final reportes =
+        widget.hechosController.hechosActivos
+            .where(
+              (h) => h.ciudadanoId == idFiltrar && h.tipoHecho != 'positivo',
+            )
+            .toList()
+          ..sort((a, b) => b.creadoEn.compareTo(a.creadoEn));
+
+    return SliverToBoxAdapter(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 32, left: 24, right: 24),
+            child: Text(
+              widget.esPerfilPropio ? 'Mis reportes' : 'Reportes',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: Colors.blueGrey[900],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (reportes.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.inbox_rounded,
+                      color: Colors.blueGrey[200],
+                      size: 28,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        widget.esPerfilPropio
+                            ? 'Todavía no publicaste reportes.'
+                            : 'Este usuario aún no publicó reportes.',
+                        style: TextStyle(color: Colors.blueGrey[500]),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            SizedBox(
+              height: 95,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                itemCount: reportes.length,
+                itemBuilder: (context, index) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: SizedBox(
+                      width: 280,
+                      child: _buildTarjetaReporteMini(reportes[index]),
+                    ),
+                  );
+                },
+              ),
+            ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTarjetaReporteMini(HechoModel h) {
+    final desc = h.descripcion ?? '';
+    final match = RegExp(r'^\[(.*?)\] - (.*)$').firstMatch(desc);
+    final categoria = match?.group(1) ?? 'Reporte';
+    final textoLimpio = match?.group(2) ?? desc;
+
+    final bool resuelto = h.estado == 'resuelto';
+    final Color colorEstado = resuelto ? Colors.green : AppColors.azulPrimario;
+    final String labelEstado = resuelto ? 'Resuelto' : 'Activo';
+
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => HechoDetalleScreen(
+              hecho: h,
+              controller: widget.hechosController,
+            ),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        margin: EdgeInsets.zero,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: (h.fotoUrl != null && h.fotoUrl!.isNotEmpty)
+                  ? Image.network(
+                      h.fotoUrl!,
+                      width: 56,
+                      height: 56,
+                      fit: BoxFit.cover,
+                      cacheWidth: 150,
+                      errorBuilder: (c, e, s) => _placeholderMini(),
+                    )
+                  : _placeholderMini(),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    categoria.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.4,
+                      color: AppColors.azulPrimario,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    textoLimpio.isNotEmpty ? textoLimpio : 'Reporte',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.blueGrey[900],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colorEstado.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Text(
+                      labelEstado,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: colorEstado,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: Colors.blueGrey[300]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _placeholderMini() {
+    return Container(
+      width: 56,
+      height: 56,
+      color: Colors.blueGrey[50],
+      child: Icon(Icons.image_rounded, color: Colors.blueGrey[200], size: 24),
     );
   }
 

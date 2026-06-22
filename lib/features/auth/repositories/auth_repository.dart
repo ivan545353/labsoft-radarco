@@ -96,6 +96,19 @@ class AuthRepository {
     }
   }
 
+  Future<UsuarioModel?> obtenerPerfilPorId(String usuarioId) async {
+    try {
+      final response = await _supabase
+          .from('usuarios')
+          .select()
+          .eq('id', usuarioId)
+          .single();
+      return UsuarioModel.fromJson(response);
+    } catch (e) {
+      return null;
+    }
+  }
+
   Future<void> enviarCorreoRecuperacion(String email) async {
     await _supabase.auth.resetPasswordForEmail(email);
   }

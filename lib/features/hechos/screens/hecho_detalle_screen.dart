@@ -6,6 +6,9 @@ import '../../auth/screens/login_screen.dart';
 import '../controllers/hechos_controller.dart';
 import 'package:share_plus/share_plus.dart';
 import 'comentarios_sheet.dart';
+import '../../usuarios/screens/perfil_usuario_screen.dart';
+import '../../auth/controllers/auth_controller.dart';
+import '../../auth/controllers/usuario_controller.dart';
 
 class HechoDetalleScreen extends StatefulWidget {
   final HechoModel hecho;
@@ -352,12 +355,16 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
 
   void _verPerfilAutor() {
     if (widget.hecho.ciudadanoId == null) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'El perfil de ${widget.hecho.nombreAutor} estará disponible pronto.',
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PerfilUsuarioScreen(
+          authController: AuthController(),
+          usuarioController: UsuarioController(),
+          hechosController: widget.controller,
+          esPerfilPropio: false,
+          usuarioIdVisualizado: widget.hecho.ciudadanoId,
         ),
-        duration: const Duration(seconds: 1),
       ),
     );
   }
@@ -1028,44 +1035,48 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            CircleAvatar(
-                              radius: 24,
-                              backgroundColor: Colors.blueGrey[50],
-                              backgroundImage: widget.hecho.avatarAutor != null
-                                  ? NetworkImage(widget.hecho.avatarAutor!)
-                                  : null,
-                              child: widget.hecho.avatarAutor == null
-                                  ? Icon(
-                                      Icons.person,
-                                      color: Colors.blueGrey[300],
-                                    )
-                                  : null,
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    widget.hecho.nombreAutor ?? 'Ciudadano',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Nivel ${_calcularNivel(widget.hecho.reputacionAutor)}',
-                                    style: TextStyle(
-                                      color: Colors.blueGrey[500],
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ],
+                        GestureDetector(
+                          onTap: _verPerfilAutor,
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 24,
+                                backgroundColor: Colors.blueGrey[50],
+                                backgroundImage:
+                                    widget.hecho.avatarAutor != null
+                                    ? NetworkImage(widget.hecho.avatarAutor!)
+                                    : null,
+                                child: widget.hecho.avatarAutor == null
+                                    ? Icon(
+                                        Icons.person,
+                                        color: Colors.blueGrey[300],
+                                      )
+                                    : null,
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      widget.hecho.nombreAutor ?? 'Ciudadano',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Nivel ${_calcularNivel(widget.hecho.reputacionAutor)}',
+                                      style: TextStyle(
+                                        color: Colors.blueGrey[500],
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 40),
                       ],

@@ -70,4 +70,8 @@ class UsuarioController extends ChangeNotifier {
       return false;
     }
   }
+
+  Future<UsuarioModel?> obtenerPerfilPublico(String usuarioId) {
+    return _repository.obtenerPerfilPorId(usuarioId);
+  }
 }
