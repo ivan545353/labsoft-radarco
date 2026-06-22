@@ -319,8 +319,9 @@ class _ComunidadFeedScreenState extends State<ComunidadFeedScreen> {
       builder: (context, child) {
         if (widget.controlador.estaCargando &&
             widget.controlador.hechosActivos.isEmpty) {
-          return const Center(
-            child: CircularProgressIndicator(color: AppColors.azulPrimario),
+          return Container(
+            color: const Color(0xFFF4F7FB),
+            child: const _FeedSkeleton(),
           );
         }
 
@@ -971,6 +972,94 @@ class HechoCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _FeedSkeleton extends StatefulWidget {
+  const _FeedSkeleton();
+  @override
+  State<_FeedSkeleton> createState() => _FeedSkeletonState();
+}
+
+class _FeedSkeletonState extends State<_FeedSkeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Widget _box({double? width, double height = 14, double radius = 8}) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: Colors.blueGrey[100],
+        borderRadius: BorderRadius.circular(radius),
+      ),
+    );
+  }
+
+  Widget _card() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _box(width: 80, height: 12),
+              const Spacer(),
+              _box(width: 50, height: 12),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _box(width: double.infinity, height: 16),
+          const SizedBox(height: 8),
+          _box(width: 180, height: 16),
+          const SizedBox(height: 14),
+          _box(width: double.infinity, height: 180, radius: 16),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              _box(width: 36, height: 36, radius: 18),
+              const SizedBox(width: 10),
+              _box(width: 100, height: 12),
+              const Spacer(),
+              _box(width: 60, height: 12),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.45, end: 1.0).animate(_ctrl),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 120, 20, 20),
+        physics: const NeverScrollableScrollPhysics(),
+        children: [_card(), _card(), _card()],
       ),
     );
   }

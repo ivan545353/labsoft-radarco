@@ -598,17 +598,57 @@ class _ItemComentarioState extends State<_ItemComentario> {
   }
 
   void _eliminarComentario(BuildContext modalContext) async {
-    Navigator.pop(modalContext);
+    Navigator.pop(modalContext); // cierra el menú de opciones
+
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Eliminar comentario'),
+        content: const Text(
+          '¿Seguro que querés eliminar tu comentario? Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(
+              'Cancelar',
+              style: TextStyle(color: Colors.blueGrey[600]),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text(
+              'Eliminar',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmado != true) return; // canceló: no borramos nada
+
     final exito = await widget.controller.eliminarComentario(
       widget.comentario.id,
     );
 
-    if (exito && mounted) {
+    if (!mounted) return;
+    if (exito) {
       widget.onRefrescar();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Comentario eliminado'),
           backgroundColor: AppColors.exito,
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.only(bottom: 100, left: 20, right: 20),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo eliminar el comentario.'),
+          backgroundColor: AppColors.problema,
           behavior: SnackBarBehavior.floating,
           margin: EdgeInsets.only(bottom: 100, left: 20, right: 20),
         ),
