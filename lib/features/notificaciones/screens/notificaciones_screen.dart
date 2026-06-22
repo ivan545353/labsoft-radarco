@@ -295,6 +295,9 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
                     color: AppColors.azulPrimario,
                   ),
                 )
+              : (widget.controller.mensajeError != null &&
+                    notificaciones.isEmpty)
+              ? _buildEstadoErrorNotif()
               : notificaciones.isEmpty
               ? RefreshIndicator(
                   onRefresh: _refrescarNotificaciones,
@@ -339,6 +342,56 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
                 ),
         );
       },
+    );
+  }
+
+  Widget _buildEstadoErrorNotif() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.cloud_off_rounded,
+              size: 60,
+              color: Colors.blueGrey[300],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No pudimos cargar tus avisos',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.blueGrey[800],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Revisá tu conexión e intentá de nuevo.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.blueGrey[500]),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () => widget.controller.cargarNotificaciones(),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Reintentar'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.azulPrimario,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

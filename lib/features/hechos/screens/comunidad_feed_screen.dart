@@ -36,6 +36,10 @@ class _ComunidadFeedScreenState extends State<ComunidadFeedScreen> {
     'Inseguridad',
     'Otro',
   ];
+  bool get _hayFiltrosActivos =>
+      _filtroEstado != 'Todos' ||
+      _filtroTiempo != 'Siempre' ||
+      _filtroCategoria != 'Todas';
 
   // Extrae la categoría real del texto [Categoría] - Descripción
   String _extraerCategoria(String descripcion, String tipoBackend) {
@@ -258,6 +262,56 @@ class _ComunidadFeedScreenState extends State<ComunidadFeedScreen> {
     );
   }
 
+  Widget _buildEstadoError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.cloud_off_rounded,
+              size: 60,
+              color: Colors.blueGrey[300],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No pudimos cargar los reportes',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.blueGrey[800],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Revisá tu conexión e intentá de nuevo.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.blueGrey[500]),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () => widget.controlador.cargarHechos(),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Reintentar'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.azulPrimario,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -268,6 +322,11 @@ class _ComunidadFeedScreenState extends State<ComunidadFeedScreen> {
           return const Center(
             child: CircularProgressIndicator(color: AppColors.azulPrimario),
           );
+        }
+
+        if (widget.controlador.mensajeError != null &&
+            widget.controlador.hechosActivos.isEmpty) {
+          return _buildEstadoError();
         }
 
         // MOTOR MULTI-CRITERIO: Filtramos la lista combinando los 3 filtros
@@ -485,7 +544,9 @@ class _ComunidadFeedScreenState extends State<ComunidadFeedScreen> {
                           ),
                           const SizedBox(height: 24),
                           Text(
-                            'Sin resultados',
+                            _hayFiltrosActivos
+                                ? 'Sin resultados'
+                                : 'Todo tranquilo por acá',
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -494,21 +555,25 @@ class _ComunidadFeedScreenState extends State<ComunidadFeedScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'No hay reportes que coincidan con estos filtros.',
-                            style: TextStyle(color: Colors.blueGrey[400]),
+                            _hayFiltrosActivos
+                                ? 'No hay reportes que coincidan con estos filtros.'
+                                : 'Aún no hay reportes en tu zona. ¡Sé el primero en publicar uno!',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.blueGrey[500]),
                           ),
                           const SizedBox(height: 16),
-                          TextButton.icon(
-                            onPressed: () {
-                              setState(() {
-                                _filtroEstado = 'Todos';
-                                _filtroTiempo = 'Siempre';
-                                _filtroCategoria = 'Todas';
-                              });
-                            },
-                            icon: const Icon(Icons.clear_all_rounded),
-                            label: const Text('Limpiar todos los filtros'),
-                          ),
+                          if (_hayFiltrosActivos)
+                            TextButton.icon(
+                              onPressed: () {
+                                setState(() {
+                                  _filtroEstado = 'Todos';
+                                  _filtroTiempo = 'Siempre';
+                                  _filtroCategoria = 'Todas';
+                                });
+                              },
+                              icon: const Icon(Icons.clear_all_rounded),
+                              label: const Text('Limpiar todos los filtros'),
+                            ),
                         ],
                       ),
                     ),

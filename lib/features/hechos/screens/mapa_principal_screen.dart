@@ -15,6 +15,7 @@ import '../../auth/controllers/usuario_controller.dart';
 import '../../usuarios/screens/perfil_usuario_screen.dart';
 import '../../notificaciones/screens/notificaciones_screen.dart';
 import '../../notificaciones/controllers/notificaciones_controller.dart';
+import 'package:flutter/services.dart';
 
 class MapaPrincipalScreen extends StatefulWidget {
   const MapaPrincipalScreen({super.key});
@@ -25,6 +26,7 @@ class MapaPrincipalScreen extends StatefulWidget {
 
 class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
   int _indiceTabActual = 0;
+  DateTime? _ultimoBackPress;
   final AuthController _authController = AuthController();
   final HechosController _hechosController = HechosController();
   final UsuarioController _usuarioController = UsuarioController();
@@ -65,111 +67,144 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
     hechosController: _hechosController,
   );
 
+  void _manejarBack() {
+    // Si no estamos en el mapa, primero volvemos al mapa.
+    if (_indiceTabActual != 0) {
+      setState(() => _indiceTabActual = 0);
+      return;
+    }
+    // Ya en el mapa: doble-atrás para salir.
+    final ahora = DateTime.now();
+    if (_ultimoBackPress == null ||
+        ahora.difference(_ultimoBackPress!) > const Duration(seconds: 2)) {
+      _ultimoBackPress = ahora;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Presioná atrás de nuevo para salir'),
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    SystemNavigator.pop(); // segundo back dentro de la ventana: salir
+  }
+
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<AuthState>(
-      stream: Supabase.instance.client.auth.onAuthStateChange,
-      builder: (context, snapshot) {
-        final session = snapshot.hasData ? snapshot.data!.session : null;
-        final bool estaLogueado = session != null;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _manejarBack();
+      },
+      child: StreamBuilder<AuthState>(
+        stream: Supabase.instance.client.auth.onAuthStateChange,
+        builder: (context, snapshot) {
+          final session = snapshot.hasData ? snapshot.data!.session : null;
+          final bool estaLogueado = session != null;
 
-        final List<Widget> vistas = [
-          _vistaMapa,
-          _vistaComunidad,
-          _vistaActividad,
-          _vistaPerfil,
-        ];
+          final List<Widget> vistas = [
+            _vistaMapa,
+            _vistaComunidad,
+            _vistaActividad,
+            _vistaPerfil,
+          ];
 
-        return Scaffold(
-          extendBodyBehindAppBar: true,
-          extendBody: true,
+          return Scaffold(
+            extendBodyBehindAppBar: true,
+            extendBody: true,
 
-          appBar: AppBar(
-            backgroundColor: Colors.white.withOpacity(0.7),
-            flexibleSpace: ClipRect(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(color: Colors.transparent),
+            appBar: AppBar(
+              backgroundColor: Colors.white.withOpacity(0.7),
+              flexibleSpace: ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: Container(color: Colors.transparent),
+                ),
               ),
+              elevation: 0,
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: SvgPicture.asset('assets/logo.svg', height: 45),
+                  ),
+                ],
+              ),
+              actions: [
+                if (estaLogueado)
+                  Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.logout_rounded,
+                        color: Colors.blueGrey,
+                      ),
+                      onPressed: () async {
+                        await _authController.cerrarSesion();
+                        setState(() => _indiceTabActual = 0);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Sesión cerrada exitosamente'),
+                          ),
+                        );
+                      },
+                    ),
+                  )
+                else
+                  Container(
+                    margin: const EdgeInsets.only(right: 12),
+                    child: TextButton(
+                      onPressed: () => _verificarAccesoCiudadano(() {}),
+                      style: TextButton.styleFrom(
+                        backgroundColor: AppColors.azulPrimario.withOpacity(
+                          0.1,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                      ),
+                      child: const Text(
+                        'Ingresar',
+                        style: TextStyle(
+                          color: AppColors.azulPrimario,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
-            elevation: 0,
-            title: Row(
-              mainAxisAlignment: MainAxisAlignment.start,
+
+            body: Stack(
               children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 8.0),
-                  child: SvgPicture.asset('assets/logo.svg', height: 45),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  transitionBuilder:
+                      (Widget child, Animation<double> animation) {
+                        return FadeTransition(opacity: animation, child: child);
+                      },
+                  child: KeyedSubtree(
+                    key: ValueKey<int>(_indiceTabActual),
+                    child: vistas[_indiceTabActual],
+                  ),
+                ),
+
+                // --- SMART DOCK ---
+                Positioned(
+                  bottom: 24,
+                  left: 24,
+                  right: 24,
+                  child: SafeArea(child: _buildRadarDock()),
                 ),
               ],
             ),
-            actions: [
-              if (estaLogueado)
-                Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  child: IconButton(
-                    icon: const Icon(
-                      Icons.logout_rounded,
-                      color: Colors.blueGrey,
-                    ),
-                    onPressed: () async {
-                      await _authController.cerrarSesion();
-                      setState(() => _indiceTabActual = 0);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Sesión cerrada exitosamente'),
-                        ),
-                      );
-                    },
-                  ),
-                )
-              else
-                Container(
-                  margin: const EdgeInsets.only(right: 12),
-                  child: TextButton(
-                    onPressed: () => _verificarAccesoCiudadano(() {}),
-                    style: TextButton.styleFrom(
-                      backgroundColor: AppColors.azulPrimario.withOpacity(0.1),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                    ),
-                    child: const Text(
-                      'Ingresar',
-                      style: TextStyle(
-                        color: AppColors.azulPrimario,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-
-          body: Stack(
-            children: [
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                transitionBuilder: (Widget child, Animation<double> animation) {
-                  return FadeTransition(opacity: animation, child: child);
-                },
-                child: KeyedSubtree(
-                  key: ValueKey<int>(_indiceTabActual),
-                  child: vistas[_indiceTabActual],
-                ),
-              ),
-
-              // --- SMART DOCK ---
-              Positioned(
-                bottom: 24,
-                left: 24,
-                right: 24,
-                child: SafeArea(child: _buildRadarDock()),
-              ),
-            ],
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
