@@ -45,7 +45,12 @@ class UsuarioModel {
 
   Map<String, dynamic> toJson() {
     return {
-      'alias': alias,
+      // id no se envía porque lo autogenera la base de datos
+      'auth_id':
+          authId, // 🔥 CRUCIAL: Necesario para que el onConflict funcione
+      'rol': rol,
+      'alias': alias, // Aquí viaja el alias correcto ingresado en el formulario
+      'reputacion': reputacion,
       'nombre': nombre,
       'avatar_url': avatarUrl,
       'marco_equipado': marcoEquipado,

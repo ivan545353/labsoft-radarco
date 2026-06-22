@@ -57,6 +57,7 @@ class PerfilUsuarioScreen extends StatefulWidget {
   final HechosController hechosController;
   final bool esPerfilPropio;
   final String? usuarioIdVisualizado;
+  final VoidCallback? onLogout;
 
   const PerfilUsuarioScreen({
     super.key,
@@ -65,6 +66,7 @@ class PerfilUsuarioScreen extends StatefulWidget {
     required this.hechosController,
     this.esPerfilPropio = true,
     this.usuarioIdVisualizado,
+    this.onLogout,
   });
 
   @override
@@ -550,7 +552,12 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                             ),
                             const SizedBox(height: 32),
                             InkWell(
-                              onTap: () => widget.authController.cerrarSesion(),
+                              onTap: () async {
+                                await widget.authController.cerrarSesion();
+                                if (widget.onLogout != null) {
+                                  widget.onLogout!();
+                                }
+                              },
                               borderRadius: BorderRadius.circular(16),
                               child: Container(
                                 width: double.infinity,

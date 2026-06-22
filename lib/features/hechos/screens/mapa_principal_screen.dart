@@ -65,6 +65,14 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
     authController: _authController,
     usuarioController: _usuarioController,
     hechosController: _hechosController,
+    onLogout: () {
+      if (mounted) {
+        setState(() => _indiceTabActual = 0);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sesión cerrada exitosamente')),
+        );
+      }
+    },
   );
 
   void _manejarBack() {
