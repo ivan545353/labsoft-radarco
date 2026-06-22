@@ -107,10 +107,8 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
         if (hecho.estado == 'resuelto') resueltos++;
       }
     }
-    setState(() {
-      _totalReportesCreados = creados;
-      _totalProblemasResueltos = resueltos;
-    });
+    _totalReportesCreados = creados;
+    _totalProblemasResueltos = resueltos;
   }
 
   List<LogroEvolutivo> _generarLogros() {
@@ -181,10 +179,16 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
     final double safePaddingBottom = MediaQuery.of(context).padding.bottom;
 
     return ListenableBuilder(
-      listenable: widget.usuarioController,
+      listenable: Listenable.merge([
+        widget.usuarioController,
+        widget.hechosController,
+      ]),
       builder: (context, child) {
         final perfil = widget.usuarioController.perfilActual;
         final estaCargando = widget.usuarioController.estaCargando;
+
+        // Recalculamos las estadísticas con los datos ya disponibles.
+        _calcularEstadisticasDelUsuario();
 
         final int puntos = perfil?.reputacion ?? 0;
         final int nivel = _calcularNivel(puntos);
