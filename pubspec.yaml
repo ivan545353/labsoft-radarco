@@ -44,6 +44,10 @@ dependencies:
   url_launcher: ^6.3.2
   geocoding: ^4.0.0
   exif: ^3.3.0
+  connectivity_plus: ^6.1.0   # detectar estado de red
+  hive: ^2.2.3                # cola local persistente
+  hive_flutter: ^1.1.0
+  path_provider: ^2.1.5       # guardar la imagen en disco
 
 dev_dependencies:
   flutter_test:

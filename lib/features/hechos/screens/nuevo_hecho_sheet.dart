@@ -15,6 +15,9 @@ import '../../../core/utils/geofence_caleta_olivia.dart';
 import 'hecho_detalle_screen.dart';
 import 'dart:convert';
 import '../../../core/utils/exif_foto_service.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import '../services/cola_reportes_service.dart';
+import '../services/sincronizacion_service.dart';
 
 // Kill switch para no gastar cuota de Gemini en pruebas masivas.
 // Ponelo en true para la demo / uso normal.
@@ -441,6 +444,57 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
       setState(
         () => _errorFormulario =
             'El reporte está fuera del ejido urbano de Caleta Olivia.',
+      );
+      return;
+    }
+
+    // --- FASE 5: sin conexión -> guardamos en cola y publicamos al volver ---
+    final conexion = await Connectivity().checkConnectivity();
+    final sinInternet = conexion.contains(ConnectivityResult.none);
+
+    if (sinInternet) {
+      final descripcionFinal =
+          '[${_categoriaSeleccionada!.nombre}] - ${_descripcionController.text.trim()}';
+      // Timestamp de captura: en vivo = ahora; adjuntada = fecha EXIF si la hay.
+      final capturadoEn = (_origenFoto == 'en_vivo')
+          ? DateTime.now()
+          : (_exifFoto?.fechaOriginal ?? DateTime.now());
+
+      try {
+        await ColaReportesService.encolar(
+          categoriaNombre: _categoriaSeleccionada!.nombre,
+          tipoBackend: _categoriaSeleccionada!.tipoBackend,
+          descripcionFinal: descripcionFinal,
+          latitud: _ubicacionElegida.latitude,
+          longitud: _ubicacionElegida.longitude,
+          origenFoto: _origenFoto ?? 'en_vivo',
+          imagenOriginal: _imagenSeleccionada!,
+          capturadoEn: capturadoEn,
+        );
+        SincronizacionService.instancia.notificarCola();
+        debugPrint(
+          '📥 Encolado offline. Pendientes: ${ColaReportesService.cantidadPendientes}',
+        );
+      } catch (e) {
+        if (!mounted) return;
+        setState(
+          () => _errorFormulario =
+              'No pudimos guardar el reporte sin conexión. Reintentá.',
+        );
+        return;
+      }
+
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Guardado sin conexión. Se publicará solo cuando vuelva internet.',
+          ),
+          backgroundColor: AppColors.azulPrimario,
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 4),
+        ),
       );
       return;
     }

@@ -3,6 +3,7 @@ import '../../../core/theme/app_colors.dart';
 import '../models/hecho_model.dart';
 import '../controllers/hechos_controller.dart';
 import 'hecho_detalle_screen.dart';
+import '../widgets/pendientes_banner.dart';
 
 class ComunidadFeedScreen extends StatefulWidget {
   final HechosController controlador;
@@ -263,51 +264,65 @@ class _ComunidadFeedScreenState extends State<ComunidadFeedScreen> {
   }
 
   Widget _buildEstadoError() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.cloud_off_rounded,
-              size: 60,
-              color: Colors.blueGrey[300],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No pudimos cargar los reportes',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.blueGrey[800],
+    return SafeArea(
+      child: Column(
+        children: [
+          // Banner de reportes offline: visible incluso sin conexión.
+          // (se auto-oculta si la cola está vacía)
+          const Padding(
+            padding: EdgeInsets.only(top: 20),
+            child: PendientesBanner(),
+          ),
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.cloud_off_rounded,
+                      size: 60,
+                      color: Colors.blueGrey[300],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No pudimos cargar los reportes',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blueGrey[800],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Revisá tu conexión e intentá de nuevo.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.blueGrey[500]),
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton.icon(
+                      onPressed: () => widget.controlador.cargarHechos(),
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('Reintentar'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.azulPrimario,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Revisá tu conexión e intentá de nuevo.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.blueGrey[500]),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: () => widget.controlador.cargarHechos(),
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Reintentar'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.azulPrimario,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -423,6 +438,9 @@ class _ComunidadFeedScreenState extends State<ComunidadFeedScreen> {
                     ),
                   ),
                 ),
+
+                // Fase 5: reportes offline pendientes / retenidos
+                const SliverToBoxAdapter(child: PendientesBanner()),
 
                 // BARRA DE ACCESO RÁPIDO A CATEGORÍAS Y FILTROS
                 SliverToBoxAdapter(

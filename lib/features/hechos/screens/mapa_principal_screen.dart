@@ -16,6 +16,7 @@ import '../../usuarios/screens/perfil_usuario_screen.dart';
 import '../../notificaciones/screens/notificaciones_screen.dart';
 import '../../notificaciones/controllers/notificaciones_controller.dart';
 import 'package:flutter/services.dart';
+import '../services/sincronizacion_service.dart';
 
 class MapaPrincipalScreen extends StatefulWidget {
   const MapaPrincipalScreen({super.key});
@@ -32,6 +33,15 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
   final UsuarioController _usuarioController = UsuarioController();
   final NotificacionesController _notificacionesController =
       NotificacionesController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Fase 5: al abrir la app y al recuperar conexión, publica lo que esté en cola.
+    SincronizacionService.instancia.iniciar(
+      alPublicar: _hechosController.cargarHechos,
+    );
+  }
 
   @override
   void dispose() {
