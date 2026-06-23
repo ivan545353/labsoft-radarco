@@ -1,6 +1,6 @@
 class HechoModel {
   final String id;
-  final String ciudadanoId;
+  final String? ciudadanoId;
   final String tipoHecho;
   final double latitud;
   final double longitud;
@@ -26,7 +26,7 @@ class HechoModel {
 
   HechoModel({
     required this.id,
-    required this.ciudadanoId,
+    this.ciudadanoId,
     required this.tipoHecho,
     required this.latitud,
     required this.longitud,

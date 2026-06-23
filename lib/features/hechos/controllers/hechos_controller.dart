@@ -268,10 +268,10 @@ class HechosController extends ChangeNotifier {
       );
 
       // 3b. Aviso al AUTOR ORIGINAL del hecho (si no es la misma persona)
-      if (original.ciudadanoId != ciudadanoId) {
+      if (original.ciudadanoId != null && original.ciudadanoId != ciudadanoId) {
         try {
           await _repository.crearNotificacion(
-            ciudadanoId: original.ciudadanoId,
+            ciudadanoId: original.ciudadanoId!,
             titulo: 'Confirmaron tu reporte',
             mensaje:
                 'Un vecino reportó lo mismo cerca de tu reporte de "$categoria" y sumó evidencia. Ahora tiene más respaldo comunitario.',

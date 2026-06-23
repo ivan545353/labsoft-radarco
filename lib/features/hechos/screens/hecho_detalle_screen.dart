@@ -208,7 +208,7 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) => ComentariosSheet(
         hechoId: widget.hecho.id,
-        autorHechoId: widget.hecho.ciudadanoId,
+        autorHechoId: widget.hecho.ciudadanoId ?? '',
         controller: widget.controller,
       ),
     );

@@ -167,26 +167,21 @@ class AuthController extends ChangeNotifier {
     }
   }
 
-  // --- NUEVO: Eliminar Cuenta ---
+  // --- Eliminar Cuenta (borrado real server-side) ---
   Future<bool> eliminarCuenta() async {
     try {
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) return false;
 
-      // 1. Borramos el perfil público de la tabla 'usuarios'.
-      // Si tienes configurado "ON DELETE CASCADE" en tu base de datos,
-      // esto podría borrar sus reportes. Si no, los reportes quedarán
-      // anónimos (sin ciudadano_id), lo cual es ideal para el historial del mapa.
-      await Supabase.instance.client
-          .from('usuarios')
-          .delete()
-          .eq('auth_id', user.id);
+      // Borrado real: anonimiza reportes/comentarios, borra datos personales
+      // y elimina el perfil + la cuenta de auth. Si falla, RPC lanza excepción.
+      await Supabase.instance.client.rpc('eliminar_mi_cuenta');
 
-      // 2. (Opcional) Llamada a un RPC de Supabase para borrar el Auth real
-      // await Supabase.instance.client.rpc('eliminar_usuario_auth');
-
-      // 3. Cerramos la sesión localmente para expulsarlo a la pantalla de Login
-      await cerrarSesion();
+      // Solo llegamos acá si el servidor borró de verdad.
+      // El signOut puede fallar (el token ya no existe): no debe invalidar el éxito.
+      try {
+        await cerrarSesion();
+      } catch (_) {}
 
       return true;
     } catch (e) {

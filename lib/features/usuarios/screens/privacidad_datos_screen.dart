@@ -67,9 +67,12 @@ class _PrivacidadDatosScreenState extends State<PrivacidadDatosScreen> {
     setState(() => _eliminandoCuenta = false);
 
     if (exito) {
-      // Como el AuthController ya llama a cerrarSesion(), la app redirigirá
-      // automáticamente al LoginScreen debido al StreamBuilder en el main.
-      ScaffoldMessenger.of(context).showSnackBar(
+      // La sesión ya se cerró. Volvemos a la raíz (el mapa, en modo anónimo).
+      // popUntil saca de la pila Perfil y Privacidad; el mensaje se muestra
+      // con el messenger de la app, que sobrevive al pop.
+      final messenger = ScaffoldMessenger.of(context);
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      messenger.showSnackBar(
         const SnackBar(
           content: Text(
             'Cuenta eliminada correctamente. Tus reportes ahora son anónimos.',
