@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
-import '../models/reporte_pendiente.dart';
-import '../services/sincronizacion_service.dart';
+import '../../features/hechos/models/reporte_pendiente.dart';
+import '../../features/hechos/services/sincronizacion_service.dart';
 
 /// Banner compacto del feed: aparece solo si hay reportes offline en cola.
 /// Toca -> hoja con la lista y acciones de reintentar/descartar.
@@ -21,7 +21,9 @@ class PendientesBanner extends StatelessWidget {
         final pendientes = cola.where((r) => r.estado == 'pendiente').length;
         final retenidos = cola.where((r) => r.estado == 'retenido').length;
         final hayProblema = retenidos > 0;
-        final Color base = hayProblema ? Colors.orange : AppColors.azulPrimario;
+        final Color base = hayProblema
+            ? Colors.orange[800]!
+            : AppColors.azulPrimario;
 
         String texto;
         if (servicio.sincronizando) {
@@ -48,7 +50,7 @@ class PendientesBanner extends StatelessWidget {
               decoration: BoxDecoration(
                 color: base.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: base.withOpacity(0.3)),
+                border: Border(left: BorderSide(color: base, width: 4)),
               ),
               child: Row(
                 children: [
@@ -135,7 +137,7 @@ class PendientesBanner extends StatelessWidget {
                       child: Center(
                         child: Text(
                           'No hay reportes pendientes.',
-                          style: TextStyle(color: Colors.blueGrey[400]),
+                          style: TextStyle(color: Colors.blueGrey[600]),
                         ),
                       ),
                     )
@@ -202,7 +204,7 @@ class PendientesBanner extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   height: 1.3,
-                  color: retenido ? Colors.orange[800] : Colors.blueGrey[500],
+                  color: retenido ? Colors.orange[800] : Colors.blueGrey[600],
                 ),
               ),
               const SizedBox(height: 6),
@@ -210,24 +212,35 @@ class PendientesBanner extends StatelessWidget {
                 children: [
                   GestureDetector(
                     onTap: () => servicio.reintentar(r),
-                    child: const Text(
-                      'Reintentar',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.azulPrimario,
+                    behavior: HitTestBehavior.opaque,
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                      child: Text(
+                        'Reintentar',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.azulPrimario,
+                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12),
                   GestureDetector(
                     onTap: () => servicio.descartar(r),
-                    child: Text(
-                      'Descartar',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blueGrey[400],
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 6,
+                        horizontal: 2,
+                      ),
+                      child: Text(
+                        'Descartar',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blueGrey[600],
+                        ),
                       ),
                     ),
                   ),

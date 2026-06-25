@@ -12,6 +12,7 @@ class RadarCiudadanoApp extends StatelessWidget {
       title: 'RadarCO',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
+        fontFamily: 'Nunito',
         scaffoldBackgroundColor: AppColors.fondoGeneral,
         colorScheme: ColorScheme.fromSeed(
           seedColor: AppColors.azulPrimario,

@@ -112,9 +112,9 @@ class _LoginScreenState extends State<LoginScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text(
+              child: Text(
                 'Cancelar',
-                style: TextStyle(color: Colors.grey),
+                style: TextStyle(color: Colors.blueGrey[600]),
               ),
             ),
             ElevatedButton(
@@ -172,7 +172,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      SvgPicture.asset('assets/logo.svg', height: 80),
+                      SvgPicture.asset(
+                        'assets/logo.svg',
+                        height: 80,
+                        semanticsLabel: 'RadarCO',
+                      ),
                       const SizedBox(height: 40),
                       TextFormField(
                         controller: _emailController,
@@ -206,7 +210,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ? null
                               : _mostrarDialogoRecuperacion,
                           style: TextButton.styleFrom(
-                            foregroundColor: AppColors.azulAcento,
+                            foregroundColor: AppColors.azulPrimario,
                           ),
                           child: const Text('¿Olvidaste tu contraseña?'),
                         ),
@@ -223,7 +227,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 gradient: const LinearGradient(
                                   colors: [
                                     AppColors.azulPrimario,
-                                    AppColors.azulAcento,
+                                    AppColors.azulOscuro,
                                   ],
                                 ),
                                 borderRadius: BorderRadius.circular(30),
@@ -257,6 +261,12 @@ class _LoginScreenState extends State<LoginScreen> {
                               icon: Image.network(
                                 'https://developers.google.com/identity/images/g-logo.png',
                                 height: 24,
+                                errorBuilder: (context, error, stack) =>
+                                    const Icon(
+                                      Icons.login_rounded,
+                                      size: 24,
+                                      color: Colors.black54,
+                                    ),
                               ),
                               label: const Text(
                                 'Ingresar con Google',
@@ -285,7 +295,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               style: TextButton.styleFrom(
-                                foregroundColor: AppColors.azulAcento,
+                                foregroundColor: AppColors.azulPrimario,
                               ),
                               child: const Text(
                                 '¿No tienes cuenta? Regístrate aquí',

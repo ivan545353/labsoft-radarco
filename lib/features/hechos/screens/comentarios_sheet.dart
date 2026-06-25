@@ -316,7 +316,7 @@ class _ComentariosSheetState extends State<ComentariosSheet> {
                             Text(
                               'Sé el primero en aportar información.',
                               style: TextStyle(
-                                color: Colors.blueGrey[400],
+                                color: Colors.blueGrey[600],
                                 fontSize: 14,
                               ),
                             ),
@@ -413,20 +413,25 @@ class _ComentariosSheetState extends State<ComentariosSheet> {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              GestureDetector(
-                                onTap: _cancelarRespuesta,
-                                child: Container(
-                                  padding: const EdgeInsets.all(2),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.azulPrimario.withOpacity(
-                                      0.2,
+                              Semantics(
+                                button: true,
+                                label: 'Cancelar respuesta',
+                                child: GestureDetector(
+                                  onTap: _cancelarRespuesta,
+                                  behavior: HitTestBehavior.opaque,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(5),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.azulPrimario.withOpacity(
+                                        0.2,
+                                      ),
+                                      shape: BoxShape.circle,
                                     ),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.close,
-                                    size: 12,
-                                    color: AppColors.azulPrimario,
+                                    child: const Icon(
+                                      Icons.close,
+                                      size: 14,
+                                      color: AppColors.azulPrimario,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -454,18 +459,24 @@ class _ComentariosSheetState extends State<ComentariosSheet> {
                             Positioned(
                               top: 2,
                               right: 2,
-                              child: GestureDetector(
-                                onTap: () =>
-                                    setState(() => _fotoEvidencia = null),
-                                child: Container(
-                                  decoration: const BoxDecoration(
-                                    color: Colors.black54,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.close_rounded,
-                                    color: Colors.white,
-                                    size: 18,
+                              child: Semantics(
+                                button: true,
+                                label: 'Quitar foto',
+                                child: GestureDetector(
+                                  onTap: () =>
+                                      setState(() => _fotoEvidencia = null),
+                                  behavior: HitTestBehavior.opaque,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: const BoxDecoration(
+                                      color: Colors.black54,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.close_rounded,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -479,21 +490,25 @@ class _ComentariosSheetState extends State<ComentariosSheet> {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         // Botón adjuntar foto-evidencia
-                        GestureDetector(
-                          onTap: _subiendoFoto ? null : _elegirFotoEvidencia,
-                          child: Container(
-                            height: 48,
-                            width: 48,
-                            margin: const EdgeInsets.only(right: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[100],
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.grey[200]!),
-                            ),
-                            child: Icon(
-                              Icons.add_a_photo_rounded,
-                              color: Colors.blueGrey[400],
-                              size: 20,
+                        Semantics(
+                          button: true,
+                          label: 'Adjuntar foto',
+                          child: GestureDetector(
+                            onTap: _subiendoFoto ? null : _elegirFotoEvidencia,
+                            child: Container(
+                              height: 48,
+                              width: 48,
+                              margin: const EdgeInsets.only(right: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[100],
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.grey[200]!),
+                              ),
+                              child: Icon(
+                                Icons.add_a_photo_rounded,
+                                color: Colors.blueGrey[600],
+                                size: 20,
+                              ),
                             ),
                           ),
                         ),
@@ -528,28 +543,32 @@ class _ComentariosSheetState extends State<ComentariosSheet> {
                           ),
                         ),
                         const SizedBox(width: 12),
-                        GestureDetector(
-                          onTap: _enviarComentario,
-                          child: Container(
-                            height: 48,
-                            width: 48,
-                            decoration: BoxDecoration(
-                              color: AppColors.azulPrimario,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppColors.azulPrimario.withOpacity(
-                                    0.3,
+                        Semantics(
+                          button: true,
+                          label: 'Enviar comentario',
+                          child: GestureDetector(
+                            onTap: _enviarComentario,
+                            child: Container(
+                              height: 48,
+                              width: 48,
+                              decoration: BoxDecoration(
+                                color: AppColors.azulPrimario,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.azulPrimario.withOpacity(
+                                      0.3,
+                                    ),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
                                   ),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.send_rounded,
-                              color: Colors.white,
-                              size: 20,
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.send_rounded,
+                                color: Colors.white,
+                                size: 20,
+                              ),
                             ),
                           ),
                         ),
@@ -828,21 +847,26 @@ class _ItemComentarioState extends State<_ItemComentario> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Avatar
-              GestureDetector(
-                onTap: _verPerfilComentarista,
-                child: CircleAvatar(
-                  radius: avatarSize,
-                  backgroundColor: Colors.blueGrey[50],
-                  backgroundImage: widget.comentario.avatarAutor != null
-                      ? NetworkImage(widget.comentario.avatarAutor!)
-                      : null,
-                  child: widget.comentario.avatarAutor == null
-                      ? Icon(
-                          Icons.person,
-                          size: avatarSize,
-                          color: Colors.blueGrey[300],
-                        )
-                      : null,
+              Semantics(
+                button: true,
+                label:
+                    'Ver perfil de ${widget.comentario.nombreAutor ?? 'Anónimo'}',
+                child: GestureDetector(
+                  onTap: _verPerfilComentarista,
+                  child: CircleAvatar(
+                    radius: avatarSize,
+                    backgroundColor: Colors.blueGrey[50],
+                    backgroundImage: widget.comentario.avatarAutor != null
+                        ? NetworkImage(widget.comentario.avatarAutor!)
+                        : null,
+                    child: widget.comentario.avatarAutor == null
+                        ? Icon(
+                            Icons.person,
+                            size: avatarSize,
+                            color: Colors.blueGrey[300],
+                          )
+                        : null,
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -877,7 +901,7 @@ class _ItemComentarioState extends State<_ItemComentario> {
                             child: const Text(
                               'AUTOR',
                               style: TextStyle(
-                                fontSize: 9,
+                                fontSize: 11,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
                                 letterSpacing: 0.5,
@@ -885,12 +909,20 @@ class _ItemComentarioState extends State<_ItemComentario> {
                             ),
                           ),
                         const Spacer(),
-                        GestureDetector(
-                          onTap: () => _mostrarOpcionesModeracion(context),
-                          child: Icon(
-                            Icons.more_horiz,
-                            size: 16,
-                            color: Colors.blueGrey[300],
+                        Semantics(
+                          button: true,
+                          label: 'Opciones del comentario',
+                          child: GestureDetector(
+                            onTap: () => _mostrarOpcionesModeracion(context),
+                            behavior: HitTestBehavior.opaque,
+                            child: Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: Icon(
+                                Icons.more_horiz,
+                                size: 18,
+                                color: Colors.blueGrey[500],
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -899,8 +931,8 @@ class _ItemComentarioState extends State<_ItemComentario> {
                     Text(
                       _formatearFechaHora(widget.comentario.creadoEn),
                       style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.blueGrey[400],
+                        fontSize: 12,
+                        color: Colors.blueGrey[600],
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -962,54 +994,65 @@ class _ItemComentarioState extends State<_ItemComentario> {
                         if (widget.onResponder != null)
                           GestureDetector(
                             onTap: () => widget.onResponder!(widget.comentario),
-                            child: Text(
-                              'Responder',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blueGrey[400],
+                            behavior: HitTestBehavior.opaque,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 8,
+                                horizontal: 4,
+                              ),
+                              child: Text(
+                                'Responder',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.azulPrimario,
+                                ),
                               ),
                             ),
                           ),
                         const Spacer(),
-                        GestureDetector(
-                          onTap: _manejarLike,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _dioLike
-                                  ? Colors.red[50]
-                                  : Colors.grey[50],
-                              borderRadius: BorderRadius.circular(100),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  _dioLike
-                                      ? Icons.favorite_rounded
-                                      : Icons.favorite_border_rounded,
-                                  size: 14,
-                                  color: _dioLike
-                                      ? Colors.red[500]
-                                      : Colors.blueGrey[300],
-                                ),
-                                if (_conteoLikes > 0) ...[
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '$_conteoLikes',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: _dioLike
-                                          ? Colors.red[600]
-                                          : Colors.blueGrey[500],
-                                    ),
+                        Semantics(
+                          button: true,
+                          label: 'Me gusta',
+                          child: GestureDetector(
+                            onTap: _manejarLike,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _dioLike
+                                    ? Colors.red[50]
+                                    : Colors.grey[50],
+                                borderRadius: BorderRadius.circular(100),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    _dioLike
+                                        ? Icons.favorite_rounded
+                                        : Icons.favorite_border_rounded,
+                                    size: 14,
+                                    color: _dioLike
+                                        ? Colors.red[500]
+                                        : Colors.blueGrey[500],
                                   ),
+                                  if (_conteoLikes > 0) ...[
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '$_conteoLikes',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: _dioLike
+                                            ? Colors.red[600]
+                                            : Colors.blueGrey[600],
+                                      ),
+                                    ),
+                                  ],
                                 ],
-                              ],
+                              ),
                             ),
                           ),
                         ),

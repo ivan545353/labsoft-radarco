@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/categoria_ui.dart';
+import '../../../core/widgets/sello_estado.dart';
+import '../../../core/widgets/aviso_inline.dart';
 import '../models/hecho_model.dart';
 import '../../auth/screens/login_screen.dart';
 import '../controllers/hechos_controller.dart';
@@ -298,44 +301,6 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
     return {'categoria': catFallback, 'descripcion': descRaw};
   }
 
-  Map<String, dynamic> _getEstilosCategoria(
-    String categoria,
-    String tipoBackend,
-  ) {
-    switch (categoria) {
-      case 'Bache':
-        return {'icono': Icons.terrain_rounded, 'color': Colors.red[600]};
-      case 'Basura':
-        return {
-          'icono': Icons.delete_outline_rounded,
-          'color': Colors.brown[500],
-        };
-      case 'Luminaria':
-        return {
-          'icono': Icons.lightbulb_outline_rounded,
-          'color': Colors.amber[600],
-        };
-      case 'Agua / Caño':
-        return {'icono': Icons.water_drop_outlined, 'color': Colors.blue[600]};
-      case 'Accidente':
-        return {
-          'icono': Icons.car_crash_outlined,
-          'color': Colors.deepOrange[500],
-        };
-      case 'Obstrucción':
-        return {'icono': Icons.block_flipped, 'color': Colors.orange[600]};
-      case 'Inseguridad':
-        return {'icono': Icons.security_outlined, 'color': Colors.purple[500]};
-      default:
-        return tipoBackend == 'alerta'
-            ? {'icono': Icons.warning_rounded, 'color': Colors.orange[600]}
-            : {
-                'icono': Icons.report_problem_rounded,
-                'color': Colors.blueGrey[600],
-              };
-    }
-  }
-
   String _tiempoTranscurrido(DateTime fecha) {
     final diferencia = DateTime.now().difference(fecha);
     if (diferencia.inDays > 7)
@@ -392,11 +357,8 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
     final parseado = _parsearDescripcion();
     final categoriaNombre = parseado['categoria']!;
     final descripcionLimpia = parseado['descripcion']!;
-    final estilosUI = _getEstilosCategoria(
-      categoriaNombre,
-      widget.hecho.tipoHecho,
-    );
-    final colorPrincipal = estilosUI['color'] as Color;
+    final estilosUI = CategoriaUI.de(categoriaNombre, widget.hecho.tipoHecho);
+    final colorPrincipal = estilosUI.color;
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
@@ -491,22 +453,26 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                InkWell(
-                  onTap: _manejarCompartir,
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: Colors.blueGrey[100]!,
-                        width: 1.5,
+                Semantics(
+                  button: true,
+                  label: 'Compartir',
+                  child: InkWell(
+                    onTap: _manejarCompartir,
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Colors.blueGrey[100]!,
+                          width: 1.5,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Icon(
-                      Icons.ios_share_rounded,
-                      color: Colors.blueGrey[700],
-                      size: 20,
+                      child: Icon(
+                        Icons.ios_share_rounded,
+                        color: Colors.blueGrey[700],
+                        size: 20,
+                      ),
                     ),
                   ),
                 ),
@@ -584,115 +550,40 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // SELLO DE TRANSPARENCIA (Capa 2)
                         // SELLO DE TRANSPARENCIA (Capa 2 · confianza de la foto)
                         if (widget.hecho.origenFoto != null) ...[
                           const SizedBox(height: 14),
-                          Builder(
-                            builder: (context) {
-                              final enVivo =
-                                  widget.hecho.origenFoto == 'en_vivo';
-                              final MaterialColor base = enVivo
-                                  ? Colors.green
-                                  : Colors.orange;
-                              return Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: base[50],
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: base[200]!),
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      enVivo
-                                          ? Icons.verified_rounded
-                                          : Icons.gpp_maybe_rounded,
-                                      size: 16,
-                                      color: enVivo
-                                          ? Colors.green[700]
-                                          : Colors.orange[800],
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Flexible(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            enVivo
-                                                ? 'Foto tomada en el lugar'
-                                                : 'Foto cargada · no verificada en el lugar',
-                                            style: TextStyle(
-                                              fontSize: 12.5,
-                                              fontWeight: FontWeight.w800,
-                                              color: enVivo
-                                                  ? Colors.green[800]
-                                                  : Colors.orange[900],
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            enVivo
-                                                ? 'Capturada en vivo desde la app. Máxima confianza.'
-                                                : 'Reporte a distancia. Su confianza depende de la validación de la comunidad.',
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              height: 1.3,
-                                              color: Colors.blueGrey[600],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
+                          if (widget.hecho.origenFoto == 'en_vivo')
+                            const AvisoInline(
+                              icono: Icons.verified_rounded,
+                              color: AppColors.exito,
+                              titulo: 'Foto tomada en el lugar',
+                              detalle:
+                                  'Capturada en vivo desde la app. Máxima confianza.',
+                            )
+                          else
+                            AvisoInline(
+                              icono: Icons.gpp_maybe_rounded,
+                              color: Colors.orange[700]!,
+                              titulo:
+                                  'Foto cargada · no verificada en el lugar',
+                              detalle:
+                                  'Reporte a distancia. Su confianza depende de la validación de la comunidad.',
+                            ),
                         ],
                         const SizedBox(height: 20),
                         Row(
                           children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: colorPrincipal.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(100),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    estilosUI['icono'],
-                                    size: 16,
-                                    color: colorPrincipal,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    categoriaNombre.toUpperCase(),
-                                    style: TextStyle(
-                                      color: colorPrincipal,
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 12,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                            SelloEstado(
+                              icono: estilosUI.icono,
+                              texto: categoriaNombre.toUpperCase(),
+                              color: colorPrincipal,
                             ),
                             const Spacer(),
                             Text(
                               _tiempoTranscurrido(widget.hecho.creadoEn),
                               style: TextStyle(
-                                color: Colors.blueGrey[400],
+                                color: Colors.blueGrey[600],
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -740,47 +631,12 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
 
                         // Estado Visual Rápido Relativo
                         if (_estadoActual == 'resuelto')
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.green[50],
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.verified_user_rounded,
-                                  color: Colors.green[700],
-                                  size: 28,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Posiblemente Solucionado',
-                                        style: TextStyle(
-                                          color: Colors.green[900],
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 15,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        'El autor o la comunidad indican que este problema ya habría sido reparado.',
-                                        style: TextStyle(
-                                          color: Colors.green[800],
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
+                          const AvisoInline(
+                            icono: Icons.verified_user_rounded,
+                            color: AppColors.exito,
+                            titulo: 'Posiblemente Solucionado',
+                            detalle:
+                                'El autor o la comunidad indican que este problema ya habría sido reparado.',
                           ),
                       ],
                     ),
@@ -806,261 +662,278 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                         const SizedBox(height: 16),
 
                         if (!_esMio) ...[
-                          GestureDetector(
-                            onTap: _estadoActual == 'resuelto'
-                                ? null
-                                : _manejarVotoSiguePasando,
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                color: _votoSiguePasando
-                                    ? Colors.red[50]
-                                    : Colors.white,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
+                          Semantics(
+                            button: true,
+                            child: GestureDetector(
+                              onTap: _estadoActual == 'resuelto'
+                                  ? null
+                                  : _manejarVotoSiguePasando,
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
                                   color: _votoSiguePasando
-                                      ? Colors.red[300]!
-                                      : Colors.grey[200]!,
-                                  width: 2,
+                                      ? Colors.red[50]
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: _votoSiguePasando
+                                        ? Colors.red[300]!
+                                        : Colors.grey[200]!,
+                                    width: 2,
+                                  ),
+                                  boxShadow: _votoSiguePasando
+                                      ? []
+                                      : [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(
+                                              0.03,
+                                            ),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
                                 ),
-                                boxShadow: _votoSiguePasando
-                                    ? []
-                                    : [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.03),
-                                          blurRadius: 10,
-                                          offset: const Offset(0, 4),
-                                        ),
-                                      ],
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: _votoSiguePasando
-                                          ? Colors.red[400]
-                                          : Colors.grey[100],
-                                      shape: BoxShape.circle,
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: _votoSiguePasando
+                                            ? Colors.red[400]
+                                            : Colors.grey[100],
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.warning_rounded,
+                                        color: _votoSiguePasando
+                                            ? Colors.white
+                                            : Colors.blueGrey[400],
+                                      ),
                                     ),
-                                    child: Icon(
-                                      Icons.warning_rounded,
-                                      color: _votoSiguePasando
-                                          ? Colors.white
-                                          : Colors.blueGrey[400],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'El problema persiste',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16,
-                                            color: Colors.blueGrey[900],
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'El problema persiste',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                              color: Colors.blueGrey[900],
+                                            ),
                                           ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          '$_conteoSiguePasando vecinos lo confirmaron',
-                                          style: TextStyle(
-                                            color: Colors.blueGrey[500],
-                                            fontSize: 13,
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            '$_conteoSiguePasando vecinos lo confirmaron',
+                                            style: TextStyle(
+                                              color: Colors.blueGrey[600],
+                                              fontSize: 13,
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  if (_votoSiguePasando)
-                                    const Icon(
-                                      Icons.check_circle,
-                                      color: Colors.red,
-                                    ),
-                                ],
+                                    if (_votoSiguePasando)
+                                      const Icon(
+                                        Icons.check_circle,
+                                        color: Colors.red,
+                                      ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
                           const SizedBox(height: 16),
 
-                          GestureDetector(
-                            onTap: _manejarVotoResuelto,
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                color:
-                                    _votoResuelto || _estadoActual == 'resuelto'
-                                    ? Colors.green[50]
-                                    : Colors.white,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
+                          Semantics(
+                            button: true,
+                            child: GestureDetector(
+                              onTap: _manejarVotoResuelto,
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
                                   color:
                                       _votoResuelto ||
                                           _estadoActual == 'resuelto'
-                                      ? Colors.green[400]!
-                                      : Colors.grey[200]!,
-                                  width: 2,
+                                      ? Colors.green[50]
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color:
+                                        _votoResuelto ||
+                                            _estadoActual == 'resuelto'
+                                        ? Colors.green[400]!
+                                        : Colors.grey[200]!,
+                                    width: 2,
+                                  ),
+                                  boxShadow:
+                                      _votoResuelto ||
+                                          _estadoActual == 'resuelto'
+                                      ? []
+                                      : [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(
+                                              0.03,
+                                            ),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
                                 ),
-                                boxShadow:
-                                    _votoResuelto || _estadoActual == 'resuelto'
-                                    ? []
-                                    : [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.03),
-                                          blurRadius: 10,
-                                          offset: const Offset(0, 4),
-                                        ),
-                                      ],
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color:
-                                          _votoResuelto ||
-                                              _estadoActual == 'resuelto'
-                                          ? AppColors.exito
-                                          : Colors.grey[100],
-                                      shape: BoxShape.circle,
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color:
+                                            _votoResuelto ||
+                                                _estadoActual == 'resuelto'
+                                            ? AppColors.exito
+                                            : Colors.grey[100],
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.how_to_reg_rounded,
+                                        color:
+                                            _votoResuelto ||
+                                                _estadoActual == 'resuelto'
+                                            ? Colors.white
+                                            : Colors.blueGrey[400],
+                                      ),
                                     ),
-                                    child: Icon(
-                                      Icons.how_to_reg_rounded,
-                                      color:
-                                          _votoResuelto ||
-                                              _estadoActual == 'resuelto'
-                                          ? Colors.white
-                                          : Colors.blueGrey[400],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          _estadoActual == 'resuelto'
-                                              ? 'Posiblemente Solucionado'
-                                              : (_votoResuelto
-                                                    ? 'Aportaste a la resolución'
-                                                    : '¿Crees que ya se resolvió?'),
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16,
-                                            color: Colors.blueGrey[900],
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            _estadoActual == 'resuelto'
+                                                ? 'Posiblemente Solucionado'
+                                                : (_votoResuelto
+                                                      ? 'Aportaste a la resolución'
+                                                      : '¿Crees que ya se resolvió?'),
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                              color: Colors.blueGrey[900],
+                                            ),
                                           ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          _estadoActual == 'resuelto'
-                                              ? 'El autor o 3 vecinos indicaron que esto se arregló'
-                                              : '$_conteoResuelto usuarios creen que se arregló',
-                                          style: TextStyle(
-                                            color: Colors.blueGrey[500],
-                                            fontSize: 13,
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            _estadoActual == 'resuelto'
+                                                ? 'El autor o 3 vecinos indicaron que esto se arregló'
+                                                : '$_conteoResuelto usuarios creen que se arregló',
+                                            style: TextStyle(
+                                              color: Colors.blueGrey[600],
+                                              fontSize: 13,
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  if (_votoResuelto ||
-                                      _estadoActual == 'resuelto')
-                                    const Icon(
-                                      Icons.check_circle,
-                                      color: AppColors.exito,
-                                    ),
-                                ],
+                                    if (_votoResuelto ||
+                                        _estadoActual == 'resuelto')
+                                      const Icon(
+                                        Icons.check_circle,
+                                        color: AppColors.exito,
+                                      ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
                         ] else ...[
                           // BOTÓN CERRAR OP MODIFICADO A "CONFIRMACIÓN"
-                          GestureDetector(
-                            onTap: _estadoActual == 'resuelto'
-                                ? null
-                                : _marcarComoPosiblementeResueltoOP,
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                color: _estadoActual == 'resuelto'
-                                    ? Colors.green[50]
-                                    : Colors.white,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
+                          Semantics(
+                            button: true,
+                            child: GestureDetector(
+                              onTap: _estadoActual == 'resuelto'
+                                  ? null
+                                  : _marcarComoPosiblementeResueltoOP,
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
                                   color: _estadoActual == 'resuelto'
-                                      ? Colors.green[300]!
-                                      : Colors.grey[200]!,
-                                  width: 2,
+                                      ? Colors.green[50]
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: _estadoActual == 'resuelto'
+                                        ? Colors.green[300]!
+                                        : Colors.grey[200]!,
+                                    width: 2,
+                                  ),
+                                  boxShadow: _estadoActual == 'resuelto'
+                                      ? []
+                                      : [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(
+                                              0.03,
+                                            ),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
                                 ),
-                                boxShadow: _estadoActual == 'resuelto'
-                                    ? []
-                                    : [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.03),
-                                          blurRadius: 10,
-                                          offset: const Offset(0, 4),
-                                        ),
-                                      ],
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: _estadoActual == 'resuelto'
-                                          ? AppColors.exito
-                                          : Colors.grey[100],
-                                      shape: BoxShape.circle,
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: _estadoActual == 'resuelto'
+                                            ? AppColors.exito
+                                            : Colors.grey[100],
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.how_to_reg_rounded,
+                                        color: _estadoActual == 'resuelto'
+                                            ? Colors.white
+                                            : Colors.blueGrey[400],
+                                      ),
                                     ),
-                                    child: Icon(
-                                      Icons.how_to_reg_rounded,
-                                      color: _estadoActual == 'resuelto'
-                                          ? Colors.white
-                                          : Colors.blueGrey[400],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          _estadoActual == 'resuelto'
-                                              ? 'Confirmaste la reparación'
-                                              : '¿Se solucionó el problema?',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w900,
-                                            fontSize: 16,
-                                            color: Colors.blueGrey[900],
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            _estadoActual == 'resuelto'
+                                                ? 'Confirmaste la reparación'
+                                                : '¿Se solucionó el problema?',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 16,
+                                              color: Colors.blueGrey[900],
+                                            ),
                                           ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          _estadoActual == 'resuelto'
-                                              ? 'Tu confirmación ayuda a mantener el mapa actualizado'
-                                              : 'Indica a los vecinos si ya repararon esto',
-                                          style: TextStyle(
-                                            color: Colors.blueGrey[500],
-                                            fontSize: 13,
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            _estadoActual == 'resuelto'
+                                                ? 'Tu confirmación ayuda a mantener el mapa actualizado'
+                                                : 'Indica a los vecinos si ya repararon esto',
+                                            style: TextStyle(
+                                              color: Colors.blueGrey[600],
+                                              fontSize: 13,
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  if (_estadoActual == 'resuelto')
-                                    const Icon(
-                                      Icons.check_circle,
-                                      color: AppColors.exito,
-                                    ),
-                                ],
+                                    if (_estadoActual == 'resuelto')
+                                      const Icon(
+                                        Icons.check_circle,
+                                        color: AppColors.exito,
+                                      ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -1085,47 +958,52 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        GestureDetector(
-                          onTap: _verPerfilAutor,
-                          child: Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 24,
-                                backgroundColor: Colors.blueGrey[50],
-                                backgroundImage:
-                                    widget.hecho.avatarAutor != null
-                                    ? NetworkImage(widget.hecho.avatarAutor!)
-                                    : null,
-                                child: widget.hecho.avatarAutor == null
-                                    ? Icon(
-                                        Icons.person,
-                                        color: Colors.blueGrey[300],
-                                      )
-                                    : null,
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      widget.hecho.nombreAutor ?? 'Ciudadano',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                    Text(
-                                      'Nivel ${_calcularNivel(widget.hecho.reputacionAutor)}',
-                                      style: TextStyle(
-                                        color: Colors.blueGrey[500],
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ],
+                        Semantics(
+                          button: true,
+                          label: 'Ver perfil del autor',
+                          child: GestureDetector(
+                            onTap: _verPerfilAutor,
+                            child: Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 24,
+                                  backgroundColor: Colors.blueGrey[50],
+                                  backgroundImage:
+                                      widget.hecho.avatarAutor != null
+                                      ? NetworkImage(widget.hecho.avatarAutor!)
+                                      : null,
+                                  child: widget.hecho.avatarAutor == null
+                                      ? Icon(
+                                          Icons.person,
+                                          color: Colors.blueGrey[300],
+                                        )
+                                      : null,
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        widget.hecho.nombreAutor ?? 'Ciudadano',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Nivel ${_calcularNivel(widget.hecho.reputacionAutor)}',
+                                        style: TextStyle(
+                                          color: Colors.blueGrey[600],
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                         const SizedBox(height: 40),

@@ -7,6 +7,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/aviso_inline.dart';
 import '../models/hecho_model.dart';
 import '../controllers/hechos_controller.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
@@ -1100,9 +1101,13 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         const SizedBox(height: 6),
         Text(
           'Mové el mapa para dejar el pin justo sobre el hecho. Podés reportar un punto aunque no estés parado ahí.',
-          style: TextStyle(color: Colors.blueGrey[400], fontSize: 18),
+          style: TextStyle(
+            color: Colors.blueGrey[600],
+            fontSize: 16,
+            height: 1.4,
+          ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
         Expanded(
           child: ClipRRect(
             borderRadius: BorderRadius.circular(24),
@@ -1132,14 +1137,18 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
                 ),
 
                 // PIN FIJO CENTRAL (se eleva un poco para que la punta marque el centro)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 42),
-                  child: Icon(
-                    Icons.location_on,
-                    size: 50,
-                    color: _dentroDeGeocerca
-                        ? AppColors.azulPrimario
-                        : AppColors.problema,
+                // Decorativo: el estado dentro/fuera ya se comunica con texto
+                // en el indicador de arriba, así que se excluye del lector.
+                ExcludeSemantics(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 42),
+                    child: Icon(
+                      Icons.location_on,
+                      size: 50,
+                      color: _dentroDeGeocerca
+                          ? AppColors.azulPrimario
+                          : AppColors.problema,
+                    ),
                   ),
                 ),
 
@@ -1265,8 +1274,9 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
                 Positioned(
                   bottom: 16,
                   right: 16,
-                  child: FloatingActionButton.small(
+                  child: FloatingActionButton(
                     heroTag: 'fab_centrar_ubicacion',
+                    tooltip: 'Centrar en mi ubicación',
                     backgroundColor: Colors.white,
                     foregroundColor: AppColors.azulPrimario,
                     elevation: 4,
@@ -1297,7 +1307,11 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         const SizedBox(height: 6),
         Text(
           'Selecciona la categoría que mejor describa el problema.',
-          style: TextStyle(color: Colors.blueGrey[400], fontSize: 22),
+          style: TextStyle(
+            color: Colors.blueGrey[600],
+            fontSize: 16,
+            height: 1.4,
+          ),
         ),
         const SizedBox(height: 24),
         Expanded(
@@ -1396,7 +1410,11 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
         const SizedBox(height: 6),
         Text(
           'Brinda información clara para que los demás vecinos lo ubiquen rápidamente.',
-          style: TextStyle(color: Colors.blueGrey[400], fontSize: 22),
+          style: TextStyle(
+            color: Colors.blueGrey[600],
+            fontSize: 16,
+            height: 1.4,
+          ),
         ),
         const SizedBox(height: 24),
         Container(
@@ -1476,82 +1494,26 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
     VoidCallback? onAccion,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(top: 14),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withOpacity(0.4)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(icono, color: color, size: 20),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        titulo,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: Colors.blueGrey[900],
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        detalle,
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          color: Colors.blueGrey[600],
-                          height: 1.3,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            if (accionTexto != null && onAccion != null) ...[
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: onAccion,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: color,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: Text(
-                    accionTexto,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
+      padding: const EdgeInsets.only(top: 16),
+      child: AvisoInline(
+        icono: icono,
+        color: color,
+        titulo: titulo,
+        detalle: detalle,
+        accionTexto: accionTexto,
+        onAccion: onAccion,
       ),
     );
   }
 
   // Sello que comunica el nivel de confianza de la foto (puntos 4 y 7).
+  // Usa el lenguaje unificado de AvisoInline (mismo estilo que avisos de IA).
   Widget _selloVerificacionFoto() {
     if (_origenFoto == null) return const SizedBox.shrink();
 
     // En vivo: máxima confianza.
     if (_origenFoto == 'en_vivo') {
-      return _chipVerificacion(
+      return const AvisoInline(
         icono: Icons.verified_rounded,
         color: AppColors.exito,
         titulo: 'Foto tomada en el lugar',
@@ -1561,7 +1523,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
 
     // Adjuntada (remoto) y verificable por metadatos.
     if (_fotoRemotaVerificable) {
-      return _chipVerificacion(
+      return const AvisoInline(
         icono: Icons.gpp_good_rounded,
         color: AppColors.azulPrimario,
         titulo: 'Foto reciente verificada',
@@ -1571,60 +1533,13 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
     }
 
     // Adjuntada (remoto) NO verificable -> downgrade visible (se permite igual).
-    return _chipVerificacion(
+    return AvisoInline(
       icono: Icons.gpp_maybe_rounded,
       color: Colors.orange[700]!,
       titulo: 'Foto cargada · no verificada en el lugar',
       detalle:
           'No pudimos confirmar cuándo se tomó. Tu reporte se publicará con menor '
           'nivel de confianza. Confirmá abajo que es verídico.',
-    );
-  }
-
-  Widget _chipVerificacion({
-    required IconData icono,
-    required Color color,
-    required String titulo,
-    required String detalle,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.07),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.35)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icono, size: 18, color: color),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  titulo,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13.5,
-                    color: Colors.blueGrey[900],
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  detalle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.blueGrey[600],
-                    height: 1.3,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -1682,112 +1597,116 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
           _esReporteRemoto
               ? 'Reporte a distancia: cargá una foto de tu galería, tomada hace menos de 1 día, que muestre el lugar.'
               : 'Una imagen vale más que mil palabras. Asegúrate de mostrar claramente el reporte.',
-          style: TextStyle(color: Colors.blueGrey[400], fontSize: 20),
+          style: TextStyle(
+            color: Colors.blueGrey[600],
+            fontSize: 16,
+            height: 1.4,
+          ),
         ),
         const SizedBox(height: 24),
 
         // BOTÓN CÁMARA / GALERÍA
         Expanded(
-          child: InkWell(
-            onTap: _seleccionarFoto,
-            borderRadius: BorderRadius.circular(24),
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.blueGrey[50],
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: _imagenSeleccionada != null
-                      ? AppColors.exito
-                      : Colors.blueGrey[200]!,
-                  width: _imagenSeleccionada != null ? 3 : 2,
+          child: Semantics(
+            button: true,
+            child: InkWell(
+              onTap: _seleccionarFoto,
+              borderRadius: BorderRadius.circular(24),
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.blueGrey[50],
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: _imagenSeleccionada != null
+                        ? AppColors.exito
+                        : Colors.blueGrey[200]!,
+                    width: _imagenSeleccionada != null ? 3 : 2,
+                  ),
                 ),
-              ),
-              child: _imagenSeleccionada != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(21),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Image.file(_imagenSeleccionada!, fit: BoxFit.cover),
-                          Container(
-                            color: Colors.black38,
-                          ), // Capa oscura para contraste
-                          const Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.check_circle,
-                                  color: Colors.white,
-                                  size: 48,
-                                ),
-                                SizedBox(height: 8),
-                                Text(
-                                  'Tocar para cambiar',
-                                  style: TextStyle(
+                child: _imagenSeleccionada != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(21),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image.file(_imagenSeleccionada!, fit: BoxFit.cover),
+                            Container(
+                              color: Colors.black38,
+                            ), // Capa oscura para contraste
+                            const Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.check_circle,
                                     color: Colors.white,
-                                    fontWeight: FontWeight.bold,
+                                    size: 48,
                                   ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'Tocar para cambiar',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 10,
                                 ),
                               ],
+                            ),
+                            child: Icon(
+                              _esReporteRemoto
+                                  ? Icons.photo_library_rounded
+                                  : Icons.camera_alt_rounded,
+                              color: AppColors.azulPrimario,
+                              size: 40,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _esReporteRemoto
+                                ? 'Tocar para elegir una foto de tu galería'
+                                : 'Tocar para abrir la cámara',
+                            style: TextStyle(
+                              color: Colors.blueGrey[600],
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ],
                       ),
-                    )
-                  : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 10,
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            _esReporteRemoto
-                                ? Icons.photo_library_rounded
-                                : Icons.camera_alt_rounded,
-                            color: AppColors.azulPrimario,
-                            size: 40,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          _esReporteRemoto
-                              ? 'Tocar para elegir una foto de tu galería'
-                              : 'Tocar para abrir la cámara',
-                          style: TextStyle(
-                            color: Colors.blueGrey[600],
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
+              ),
             ),
           ),
         ),
-        const SizedBox(height: 16),
-
         // SELLO DE VERIFICACIÓN (origen + metadatos EXIF)
         if (_origenFoto != null) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           _selloVerificacionFoto(),
         ],
 
-        const SizedBox(height: 16),
         // --- ANÁLISIS IA: sugerencia de categoría + plausibilidad ---
         if (_analizandoIA)
           Padding(
-            padding: const EdgeInsets.only(top: 14, bottom: 16),
+            padding: const EdgeInsets.only(top: 16),
             child: Row(
               children: [
                 const SizedBox(
@@ -1798,7 +1717,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
                 const SizedBox(width: 10),
                 Text(
                   'Analizando la imagen...',
-                  style: TextStyle(color: Colors.blueGrey[500], fontSize: 13),
+                  style: TextStyle(color: Colors.blueGrey[700], fontSize: 13),
                 ),
               ],
             ),
@@ -1842,7 +1761,8 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
           ),
         // CHECKBOX DE ATESTACIÓN (Capa 1: obligatorio para publicar)
         // CHECKBOX DE ATESTACIÓN (oculto si la IA marcó la foto como no plausible)
-        if (!_iaNoPlausible)
+        if (!_iaNoPlausible) ...[
+          const SizedBox(height: 16),
           InkWell(
             onTap: () => setState(() => _aceptoAtestacion = !_aceptoAtestacion),
             borderRadius: BorderRadius.circular(16),
@@ -1885,6 +1805,7 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
               ),
             ),
           ),
+        ],
       ],
     );
   }
@@ -1971,36 +1892,15 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
                       ),
                     ),
 
-                    // MENSAJE DE ERROR GLOBAL
+                    // MENSAJE DE ERROR GLOBAL (solo errores reales de
+                    // publicación: spam/red). Usa el aviso unificado, no una
+                    // caja con borde de color (que parecería un botón).
                     if (_errorFormulario != null) ...[
                       const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.red[50],
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.red[100]!),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.error_outline,
-                              color: Colors.red[400],
-                              size: 20,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                _errorFormulario!,
-                                style: TextStyle(
-                                  color: Colors.red[700],
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                      AvisoInline(
+                        icono: Icons.error_outline_rounded,
+                        color: AppColors.problema,
+                        titulo: _errorFormulario!,
                       ),
                     ],
 
@@ -2037,6 +1937,12 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
                             child: ElevatedButton(
                               onPressed:
                                   (_subiendoDatos ||
+                                      (_pasoActual == 2 &&
+                                          _descripcionController.text
+                                              .trim()
+                                              .isEmpty) ||
+                                      (_pasoActual == 3 &&
+                                          !_dentroDeGeocerca) ||
                                       (_pasoActual == 4 &&
                                           (_bloqueadoPorIA ||
                                               !_aceptoAtestacion)))

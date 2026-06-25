@@ -2,6 +2,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/categoria_ui.dart';
+import '../../../core/widgets/sello_estado.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../auth/controllers/auth_controller.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -61,6 +63,21 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
     } else {
       accionPermitida();
     }
+  }
+
+  // Abre el wizard de nuevo reporte (con verificación de sesión).
+  // Extraído para poder reutilizarlo desde el FAB envuelto en Semantics.
+  void _abrirNuevoReporte() {
+    _verificarAccesoCiudadano(() {
+      final userId = Supabase.instance.client.auth.currentUser!.id;
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) =>
+            NuevoHechoSheet(ciudadanoId: userId, controller: _hechosController),
+      );
+    });
   }
 
   Widget get _vistaMapa =>
@@ -147,7 +164,11 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.only(top: 8.0),
-                    child: SvgPicture.asset('assets/logo.svg', height: 45),
+                    child: SvgPicture.asset(
+                      'assets/logo.svg',
+                      height: 45,
+                      semanticsLabel: 'RadarCO',
+                    ),
                   ),
                 ],
               ),
@@ -156,9 +177,10 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
                   Container(
                     margin: const EdgeInsets.only(right: 8),
                     child: IconButton(
-                      icon: const Icon(
+                      tooltip: 'Cerrar sesión',
+                      icon: Icon(
                         Icons.logout_rounded,
-                        color: Colors.blueGrey,
+                        color: Colors.blueGrey[700],
                       ),
                       onPressed: () async {
                         await _authController.cerrarSesion();
@@ -183,7 +205,10 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                       ),
                       child: const Text(
                         'Ingresar',
@@ -254,40 +279,32 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
               _buildNavItem(0, Icons.map_rounded, 'Mapa'),
               _buildNavItem(1, Icons.dynamic_feed_rounded, 'Feed'),
 
-              GestureDetector(
-                onTap: () {
-                  _verificarAccesoCiudadano(() {
-                    final userId =
-                        Supabase.instance.client.auth.currentUser!.id;
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (context) => NuevoHechoSheet(
-                        ciudadanoId: userId,
-                        controller: _hechosController,
-                      ),
-                    );
-                  });
-                },
-                child: Container(
-                  height: 50,
-                  width: 50,
-                  decoration: BoxDecoration(
-                    color: AppColors.azulPrimario,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.azulPrimario.withOpacity(0.4),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.add_location_alt_rounded,
-                    color: Colors.white,
-                    size: 26,
+              Semantics(
+                button: true,
+                label: 'Crear nuevo reporte',
+                onTap: _abrirNuevoReporte,
+                child: GestureDetector(
+                  onTap: _abrirNuevoReporte,
+                  excludeFromSemantics: true,
+                  child: Container(
+                    height: 50,
+                    width: 50,
+                    decoration: BoxDecoration(
+                      color: AppColors.azulPrimario,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.azulPrimario.withOpacity(0.4),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.add_location_alt_rounded,
+                      color: Colors.white,
+                      size: 26,
+                    ),
                   ),
                 ),
               ),
@@ -306,7 +323,8 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
 
     Widget iconWidget = Icon(
       icon,
-      color: isSelected ? AppColors.azulPrimario : Colors.blueGrey[400],
+      // Contraste mejorado para íconos no seleccionados (antes blueGrey[400]).
+      color: isSelected ? AppColors.azulPrimario : Colors.blueGrey[600],
       size: 24,
     );
 
@@ -325,47 +343,72 @@ class _MapaPrincipalScreenState extends State<MapaPrincipalScreen> {
       );
     }
 
-    return GestureDetector(
-      onTap: () {
-        if (index == 1 || index == 2 || index == 3) {
-          _verificarAccesoCiudadano(
-            () => setState(() => _indiceTabActual = index),
-          );
-        } else {
-          setState(() => _indiceTabActual = index);
-        }
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOutQuint,
-        padding: EdgeInsets.symmetric(
-          horizontal: isSelected ? 16 : 12,
-          vertical: 10,
-        ),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.azulPrimario.withOpacity(0.1)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          children: [
-            iconWidget,
-            if (isSelected) ...[
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: AppColors.azulPrimario,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 13,
+    void manejarTap() {
+      if (index == 1 || index == 2 || index == 3) {
+        _verificarAccesoCiudadano(
+          () => setState(() => _indiceTabActual = index),
+        );
+      } else {
+        setState(() => _indiceTabActual = index);
+      }
+    }
+
+    // Estructura visual del ítem (ícono + label si está seleccionado).
+    final Widget contenido = Semantics(
+      button: true,
+      selected: isSelected,
+      label: label,
+      onTap: manejarTap,
+      child: GestureDetector(
+        onTap: manejarTap,
+        behavior: HitTestBehavior.opaque,
+        excludeFromSemantics: true,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutQuint,
+          // vertical 12 => alto mínimo 48 dp (24 del ícono + 24).
+          padding: EdgeInsets.symmetric(
+            horizontal: isSelected ? 14 : 8,
+            vertical: 12,
+          ),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AppColors.azulPrimario.withOpacity(0.1)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              iconWidget,
+              if (isSelected) ...[
+                const SizedBox(width: 8),
+                // Flexible interno: solo recorta (ellipsis) como red de
+                // seguridad en pantallas muy chicas o fuente muy grande.
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    softWrap: false,
+                    style: const TextStyle(
+                      color: AppColors.azulPrimario,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
+
+    // Solo el seleccionado es Flexible: se queda con todo el ancho sobrante
+    // (label completo). Los no seleccionados ocupan su tamaño natural (ícono).
+    return isSelected ? Flexible(child: contenido) : contenido;
   }
 }
 
@@ -440,44 +483,6 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
 
   String _extraerCategoria(String descripcion, String tipoBackend) {
     return _parsearDescripcion(descripcion, tipoBackend)['categoria']!;
-  }
-
-  Map<String, dynamic> _getEstilosCategoria(
-    String categoria,
-    String tipoBackend,
-  ) {
-    switch (categoria) {
-      case 'Bache':
-        return {'icono': Icons.terrain_rounded, 'color': Colors.red[500]};
-      case 'Basura':
-        return {
-          'icono': Icons.delete_outline_rounded,
-          'color': Colors.brown[400],
-        };
-      case 'Luminaria':
-        return {
-          'icono': Icons.lightbulb_outline_rounded,
-          'color': Colors.amber[600],
-        };
-      case 'Agua / Caño':
-        return {'icono': Icons.water_drop_outlined, 'color': Colors.blue[500]};
-      case 'Accidente':
-        return {
-          'icono': Icons.car_crash_outlined,
-          'color': Colors.deepOrange[500],
-        };
-      case 'Obstrucción':
-        return {'icono': Icons.block_flipped, 'color': Colors.orange[500]};
-      case 'Inseguridad':
-        return {'icono': Icons.security_outlined, 'color': Colors.purple[400]};
-      default:
-        return tipoBackend == 'alerta'
-            ? {'icono': Icons.warning_rounded, 'color': Colors.orange[500]}
-            : {
-                'icono': Icons.report_problem_rounded,
-                'color': Colors.blueGrey[500],
-              };
-    }
   }
 
   void _abrirPanelFiltrosAvanzados() {
@@ -907,99 +912,115 @@ class _VistaMapaInteractivaState extends State<_VistaMapaInteractiva> {
     );
     final categoriaNombre = parseado['categoria']!;
     final descripcionLimpia = parseado['descripcion']!;
-    final estilosUI = _getEstilosCategoria(categoriaNombre, hecho.tipoHecho);
+    final estilosUI = CategoriaUI.de(categoriaNombre, hecho.tipoHecho);
 
     final bool esResuelto = hecho.estado == 'resuelto';
-    final Color colorUI = esResuelto
-        ? Colors.green[600]!
-        : estilosUI['color'] as Color;
-    final IconData iconoUI = esResuelto
-        ? Icons.verified_rounded
-        : estilosUI['icono'] as IconData;
+    // El círculo izquierdo conserva SIEMPRE el color/ícono de la categoría
+    // (así la categoría no se pierde aunque el hecho esté resuelto).
+    final Color colorUI = estilosUI.color;
+    final IconData iconoUI = estilosUI.icono;
 
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => HechoDetalleScreen(
-              hecho: hecho,
-              controller: widget.controlador,
-            ),
-          ),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 40),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.grey[100]!, width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: colorUI.withOpacity(0.15),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
+    final String descripcionMostrada = descripcionLimpia.isNotEmpty
+        ? descripcionLimpia
+        : 'Reporte en la zona';
+
+    void abrirDetalle() {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              HechoDetalleScreen(hecho: hecho, controller: widget.controlador),
         ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: colorUI.withOpacity(0.1),
-                shape: BoxShape.circle,
+      );
+    }
+
+    return Semantics(
+      button: true,
+      label:
+          '${esResuelto ? 'Resuelto. ' : ''}$categoriaNombre. $descripcionMostrada. Ver detalle',
+      onTap: abrirDetalle,
+      child: GestureDetector(
+        onTap: abrirDetalle,
+        excludeFromSemantics: true,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 40),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.grey[100]!, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: colorUI.withOpacity(0.15),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
               ),
-              child: Icon(iconoUI, color: colorUI, size: 24),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    esResuelto
-                        ? 'RESUELTO • ${categoriaNombre.toUpperCase()}'
-                        : categoriaNombre.toUpperCase(),
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 11,
-                      color: colorUI,
-                      letterSpacing: 0.5,
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: colorUI.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(iconoUI, color: colorUI, size: 24),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Estado por sello estándar (solo cuando aporta info:
+                    // resuelto). Si está activo, mostramos la categoría.
+                    if (esResuelto)
+                      const SelloEstado(
+                        icono: Icons.verified_rounded,
+                        texto: 'Resuelto',
+                        color: AppColors.exito,
+                      )
+                    else
+                      Text(
+                        categoriaNombre.toUpperCase(),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12,
+                          color: colorUI,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    const SizedBox(height: 4),
+                    Text(
+                      descripcionMostrada,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: Colors.blueGrey[900],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
+                  ],
+                ),
+              ),
+              ExcludeSemantics(
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  margin: const EdgeInsets.only(left: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.blueGrey[50],
+                    shape: BoxShape.circle,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    descripcionLimpia.isNotEmpty
-                        ? descripcionLimpia
-                        : 'Reporte en la zona',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      color: Colors.blueGrey[900],
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  child: Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    color: Colors.blueGrey[400],
+                    size: 14,
                   ),
-                ],
+                ),
               ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(8),
-              margin: const EdgeInsets.only(left: 8),
-              decoration: BoxDecoration(
-                color: Colors.blueGrey[50],
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.arrow_forward_ios_rounded,
-                color: Colors.blueGrey[400],
-                size: 14,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

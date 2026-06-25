@@ -48,6 +48,7 @@ class AyudaSoporteScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
+          tooltip: 'Volver',
           icon: const Icon(
             Icons.arrow_back_ios_new_rounded,
             color: Colors.blueGrey,
@@ -97,7 +98,7 @@ class AyudaSoporteScreen extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text(
                     'Encuentra respuestas rápidas o contáctanos.',
-                    style: TextStyle(color: Colors.blueGrey[500], fontSize: 14),
+                    style: TextStyle(color: Colors.blueGrey[600], fontSize: 14),
                   ),
                 ],
               ),
@@ -110,7 +111,7 @@ class AyudaSoporteScreen extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
-                color: Colors.blueGrey[400],
+                color: Colors.blueGrey[600],
                 letterSpacing: 1.0,
               ),
             ),
@@ -165,7 +166,7 @@ class AyudaSoporteScreen extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
-                color: Colors.blueGrey[400],
+                color: Colors.blueGrey[600],
                 letterSpacing: 1.0,
               ),
             ),
@@ -217,7 +218,7 @@ class AyudaSoporteScreen extends StatelessWidget {
                           Text(
                             'soporte@radarco.app',
                             style: TextStyle(
-                              color: Colors.blueGrey[500],
+                              color: Colors.blueGrey[600],
                               fontSize: 13,
                             ),
                           ),
@@ -242,7 +243,7 @@ class AyudaSoporteScreen extends StatelessWidget {
                 'RadarCO v1.0.0 (MVP)\nHecho con ❤️ para Caleta Olivia',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.blueGrey[300],
+                  color: Colors.blueGrey[500],
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                 ),
@@ -265,7 +266,7 @@ class AyudaSoporteScreen extends StatelessWidget {
       child: ExpansionTile(
         tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
         iconColor: AppColors.azulPrimario,
-        collapsedIconColor: Colors.blueGrey[400],
+        collapsedIconColor: Colors.blueGrey[600],
         title: Text(
           pregunta,
           style: TextStyle(

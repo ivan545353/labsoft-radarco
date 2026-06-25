@@ -230,13 +230,16 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
         return {
           'icono': Icons.military_tech_rounded,
           'color': Colors.amber[600],
+          // El ámbar no pasa AA sobre blanco: el texto/ícono de acción usa un
+          // dorado oscuro legible, manteniendo el ámbar en el avatar.
+          'colorAccion': const Color(0xFF8D6E00),
           'accionTexto': 'Ver logro',
           'accionIcono': Icons.emoji_events_rounded,
         };
       default:
         return {
           'icono': Icons.info_rounded,
-          'color': Colors.blueGrey[400],
+          'color': Colors.blueGrey[600],
           'accionTexto': 'Saber más',
           'accionIcono': Icons.arrow_forward_rounded,
         };
@@ -370,7 +373,7 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
             Text(
               'Revisá tu conexión e intentá de nuevo.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.blueGrey[500]),
+              style: TextStyle(color: Colors.blueGrey[600]),
             ),
             const SizedBox(height: 20),
             ElevatedButton.icon(
@@ -425,7 +428,7 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
           Text(
             'Aquí aparecerán las actualizaciones\nde tu comunidad.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.blueGrey[400], height: 1.4),
+            style: TextStyle(color: Colors.blueGrey[600], height: 1.4),
           ),
         ],
       ),
@@ -449,6 +452,10 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
   Widget _buildItemNotificacion(NotificacionModel notificacion) {
     final config = _configuracionPorTipo(notificacion.tipo);
     final bool esNueva = !notificacion.leida;
+    // Color legible para el texto/ícono de acción (cae al color base si el tipo
+    // no define uno propio).
+    final Color colorAccion =
+        (config['colorAccion'] ?? config['color']) as Color;
 
     return Dismissible(
       key: Key(notificacion.id),
@@ -533,7 +540,7 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: Colors.blueGrey[400],
+                              color: Colors.blueGrey[600],
                             ),
                           ),
                         ],
@@ -545,7 +552,7 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
                           fontSize: 14,
                           color: esNueva
                               ? Colors.blueGrey[800]
-                              : Colors.blueGrey[500],
+                              : Colors.blueGrey[600],
                           height: 1.3,
                         ),
                       ),
@@ -568,7 +575,7 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
                               Icon(
                                 config['accionIcono'],
                                 size: 16,
-                                color: config['color'],
+                                color: colorAccion,
                               ),
                               const SizedBox(width: 6),
                               Text(
@@ -576,7 +583,7 @@ class _NotificacionesScreenState extends State<NotificacionesScreen> {
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w800,
-                                  color: config['color'],
+                                  color: colorAccion,
                                 ),
                               ),
                             ],

@@ -3,6 +3,7 @@ import 'package:radar_ciudadano/features/usuarios/screens/editar_perfil_screen.d
 import 'package:radar_ciudadano/features/usuarios/screens/privacidad_datos_screen.dart';
 import 'package:radar_ciudadano/features/usuarios/screens/ayuda_soporte_screen.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/categoria_ui.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../auth/controllers/usuario_controller.dart';
 import '../../hechos/controllers/hechos_controller.dart';
@@ -265,6 +266,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                                     child: Align(
                                       alignment: Alignment.topLeft,
                                       child: IconButton(
+                                        tooltip: 'Volver',
                                         icon: const Icon(
                                           Icons.arrow_back_ios_new_rounded,
                                           color: Colors.white,
@@ -318,7 +320,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                                     style: TextStyle(
                                       color: colorTema,
                                       fontWeight: FontWeight.w900,
-                                      fontSize: 10,
+                                      fontSize: 11,
                                       letterSpacing: 1.0,
                                     ),
                                   ),
@@ -340,7 +342,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                                       'NIVEL ${nivel + 1}',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        color: Colors.blueGrey[300],
+                                        color: Colors.blueGrey[500],
                                         fontSize: 12,
                                       ),
                                     ),
@@ -362,7 +364,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                                 Text(
                                   'Faltan ${_puntosFaltantes(puntos)} puntos para subir de nivel',
                                   style: TextStyle(
-                                    color: Colors.blueGrey[400],
+                                    color: Colors.blueGrey[600],
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -502,7 +504,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w800,
-                                color: Colors.blueGrey[400],
+                                color: Colors.blueGrey[600],
                                 letterSpacing: 1.0,
                               ),
                             ),
@@ -649,7 +651,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: Colors.blueGrey[400],
+                color: Colors.blueGrey[600],
               ),
             ),
           ],
@@ -719,7 +721,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.bold,
-              color: Colors.blueGrey[400],
+              color: Colors.blueGrey[600],
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -741,7 +743,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
-                  color: Colors.blueGrey[300],
+                  color: Colors.blueGrey[500],
                 ),
               ),
             ],
@@ -810,7 +812,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                         widget.esPerfilPropio
                             ? 'Todavía no publicaste reportes.'
                             : 'Este usuario aún no publicó reportes.',
-                        style: TextStyle(color: Colors.blueGrey[500]),
+                        style: TextStyle(color: Colors.blueGrey[600]),
                       ),
                     ),
                   ],
@@ -849,8 +851,11 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
     final textoLimpio = match?.group(2) ?? desc;
 
     final bool resuelto = h.estado == 'resuelto';
-    final Color colorEstado = resuelto ? Colors.green : AppColors.azulPrimario;
+    final Color colorEstado = resuelto
+        ? AppColors.exito
+        : AppColors.azulPrimario;
     final String labelEstado = resuelto ? 'Resuelto' : 'Activo';
+    final Color colorCategoria = CategoriaUI.de(categoria, h.tipoHecho).color;
 
     return InkWell(
       onTap: () {
@@ -898,7 +903,7 @@ class _PerfilUsuarioScreenState extends State<PerfilUsuarioScreen> {
                       fontSize: 11,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 0.4,
-                      color: AppColors.azulPrimario,
+                      color: colorCategoria,
                     ),
                   ),
                   const SizedBox(height: 2),

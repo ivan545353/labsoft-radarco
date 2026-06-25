@@ -111,7 +111,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   crossAxisAlignment: CrossAxisAlignment
                       .stretch, // Estiramos los elementos a lo ancho
                   children: [
-                    SvgPicture.asset('assets/logo.svg', height: 80),
+                    SvgPicture.asset(
+                      'assets/logo.svg',
+                      height: 80,
+                      semanticsLabel: 'RadarCO',
+                    ),
                     const SizedBox(height: 40),
                     TextFormField(
                       controller: _aliasController,
@@ -185,7 +189,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               gradient: const LinearGradient(
                                 colors: [
                                   AppColors.azulPrimario,
-                                  AppColors.azulAcento,
+                                  AppColors.azulOscuro,
                                 ],
                                 begin: Alignment.centerLeft,
                                 end: Alignment.centerRight,
@@ -221,6 +225,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             icon: Image.network(
                               'https://developers.google.com/identity/images/g-logo.png',
                               height: 24,
+                              errorBuilder: (context, error, stack) =>
+                                  const Icon(
+                                    Icons.login_rounded,
+                                    size: 24,
+                                    color: Colors.black54,
+                                  ),
                             ),
                             label: const Text(
                               'Registrarse con Google',

@@ -213,6 +213,7 @@ class _PrivacidadDatosScreenState extends State<PrivacidadDatosScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
+          tooltip: 'Volver',
           icon: const Icon(
             Icons.arrow_back_ios_new_rounded,
             color: Colors.blueGrey,
@@ -291,7 +292,7 @@ class _PrivacidadDatosScreenState extends State<PrivacidadDatosScreen> {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
-                    color: Colors.blueGrey[400],
+                    color: Colors.blueGrey[600],
                     letterSpacing: 1.0,
                   ),
                 ),
@@ -338,7 +339,7 @@ class _PrivacidadDatosScreenState extends State<PrivacidadDatosScreen> {
                         subtitle: Text(
                           'Requerido para crear reportes',
                           style: TextStyle(
-                            color: Colors.blueGrey[400],
+                            color: Colors.blueGrey[600],
                             fontSize: 12,
                           ),
                         ),
@@ -370,7 +371,7 @@ class _PrivacidadDatosScreenState extends State<PrivacidadDatosScreen> {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
-                    color: Colors.blueGrey[400],
+                    color: Colors.blueGrey[600],
                     letterSpacing: 1.0,
                   ),
                 ),
@@ -417,7 +418,7 @@ class _PrivacidadDatosScreenState extends State<PrivacidadDatosScreen> {
                         subtitle: Text(
                           'Obtén una copia de todos tus reportes',
                           style: TextStyle(
-                            color: Colors.blueGrey[400],
+                            color: Colors.blueGrey[600],
                             fontSize: 12,
                           ),
                         ),
@@ -440,7 +441,7 @@ class _PrivacidadDatosScreenState extends State<PrivacidadDatosScreen> {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
-                    color: Colors.red[400],
+                    color: Colors.red[700],
                     letterSpacing: 1.0,
                   ),
                 ),
@@ -487,7 +488,7 @@ class _PrivacidadDatosScreenState extends State<PrivacidadDatosScreen> {
                               Text(
                                 'Borrar permanentemente todos tus datos',
                                 style: TextStyle(
-                                  color: Colors.red[400],
+                                  color: Colors.red[700],
                                   fontSize: 12,
                                 ),
                               ),

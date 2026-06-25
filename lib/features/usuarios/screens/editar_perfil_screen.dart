@@ -131,6 +131,7 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
+          tooltip: 'Volver',
           icon: const Icon(
             Icons.arrow_back_ios_new_rounded,
             color: Colors.blueGrey,
@@ -299,7 +300,7 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
                   decoration: InputDecoration(
                     hintText: 'Ej: VecinoActivo99',
                     hintStyle: TextStyle(
-                      color: Colors.grey[400],
+                      color: Colors.grey[600],
                       fontWeight: FontWeight.normal,
                     ),
                     prefixIcon: Icon(
@@ -399,7 +400,7 @@ class _EditarPerfilScreenState extends State<EditarPerfilScreen> {
         style: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w800,
-          color: Colors.blueGrey[400],
+          color: Colors.blueGrey[600],
           letterSpacing: 1.0,
         ),
       ),

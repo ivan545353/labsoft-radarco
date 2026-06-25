@@ -3,7 +3,7 @@ import '../../../core/theme/app_colors.dart';
 import '../models/hecho_model.dart';
 import '../controllers/hechos_controller.dart';
 import 'hecho_detalle_screen.dart';
-import '../widgets/pendientes_banner.dart';
+import '../../../core/widgets/pendientes_banner.dart';
 
 class ComunidadFeedScreen extends StatefulWidget {
   final HechosController controlador;
