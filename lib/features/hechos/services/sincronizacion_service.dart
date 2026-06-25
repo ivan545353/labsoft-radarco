@@ -10,6 +10,7 @@ import '../models/hecho_model.dart';
 import '../models/reporte_pendiente.dart';
 import '../repositories/hechos_repository.dart';
 import 'cola_reportes_service.dart';
+import 'difuminado_service.dart';
 
 // Categorías válidas para la IA (mismas que el formulario).
 const List<String> kCategoriasValidasSync = [
@@ -264,15 +265,20 @@ class SincronizacionService extends ChangeNotifier {
 
   Future<String?> _subirImagen(File imagenOriginal) async {
     try {
-      final outPath = '${imagenOriginal.path}_compressed.jpg';
+      // HU7.3: también censuramos los reportes offline al publicarlos.
+      final imagenSegura = await DifuminadoService.difuminarRegionesSensibles(
+        imagenOriginal,
+      );
+
+      final outPath = '${imagenSegura.path}_compressed.jpg';
       final result = await FlutterImageCompress.compressAndGetFile(
-        imagenOriginal.absolute.path,
+        imagenSegura.absolute.path,
         outPath,
         quality: 60,
         minWidth: 1024,
         minHeight: 1024,
       );
-      final archivoFinal = result != null ? File(result.path) : imagenOriginal;
+      final archivoFinal = result != null ? File(result.path) : imagenSegura;
       final fileName = '${DateTime.now().millisecondsSinceEpoch}_offline.jpg';
       final ruta = 'reportes/$fileName';
       await Supabase.instance.client.storage

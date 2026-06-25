@@ -19,6 +19,7 @@ import '../../../core/utils/exif_foto_service.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../services/cola_reportes_service.dart';
 import '../services/sincronizacion_service.dart';
+import '../services/difuminado_service.dart';
 
 // Kill switch para no gastar cuota de Gemini en pruebas masivas.
 // Ponelo en true para la demo / uso normal.
@@ -336,26 +337,24 @@ class _NuevoHechoSheetState extends State<NuevoHechoSheet> {
     String idUsuario,
   ) async {
     try {
-      // 1. Definir ruta temporal para la imagen comprimida
-      final lastIndex = imagenOriginal.absolute.path.lastIndexOf(
-        RegExp(r'.jp'),
-      );
-      final splitted = imagenOriginal.absolute.path.substring(0, (lastIndex));
+      // HU7.3: difuminar rostros y patentes ANTES de comprimir y subir.
+      final File imagenSegura =
+          await DifuminadoService.difuminarRegionesSensibles(imagenOriginal);
+
+      final lastIndex = imagenSegura.absolute.path.lastIndexOf(RegExp(r'.jp'));
+      final splitted = imagenSegura.absolute.path.substring(0, lastIndex);
       final outPath = "${splitted}_compressed.jpg";
 
-      // 2. Compresión Física agresiva pero sin pérdida visible de calidad
       var result = await FlutterImageCompress.compressAndGetFile(
-        imagenOriginal.absolute.path,
+        imagenSegura.absolute.path,
         outPath,
-        quality: 60, // Comprime la calidad a un 60% (ideal para móviles)
-        minWidth: 1024, // Limita el ancho máximo para no subir 4K
+        quality: 60,
+        minWidth: 1024,
         minHeight: 1024,
       );
 
-      // Si falla la compresión, usamos la original como plan B
-      File archivoFinal = result != null ? File(result.path) : imagenOriginal;
+      File archivoFinal = result != null ? File(result.path) : imagenSegura;
 
-      // 3. Subir a Supabase
       final fileName =
           '${DateTime.now().millisecondsSinceEpoch}_$idUsuario.jpg';
       final ruta = 'reportes/$fileName';
