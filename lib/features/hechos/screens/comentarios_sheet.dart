@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../usuarios/screens/perfil_usuario_screen.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../auth/controllers/usuario_controller.dart';
+import '../../../core/widgets/visor_imagen.dart';
 
 // Formato de fecha/hora localizado es-AR sin dependencias externas.
 // Ej.: "12 jun 2026, 14:30". Usa hora local del dispositivo.
@@ -952,33 +953,39 @@ class _ItemComentarioState extends State<_ItemComentario> {
                     if (widget.comentario.fotoUrl != null &&
                         widget.comentario.fotoUrl!.isNotEmpty) ...[
                       const SizedBox(height: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(14),
-                        child: Image.network(
+                      GestureDetector(
+                        onTap: () => abrirVisorImagen(
+                          context,
                           widget.comentario.fotoUrl!,
-                          width: double.infinity,
-                          height: 160,
-                          fit: BoxFit.cover,
-                          cacheWidth: 600,
-                          loadingBuilder: (context, child, progress) {
-                            if (progress == null) return child;
-                            return Container(
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: Image.network(
+                            widget.comentario.fotoUrl!,
+                            width: double.infinity,
+                            height: 160,
+                            fit: BoxFit.cover,
+                            cacheWidth: 600,
+                            loadingBuilder: (context, child, progress) {
+                              if (progress == null) return child;
+                              return Container(
+                                height: 160,
+                                color: Colors.grey[100],
+                                child: const Center(
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stack) => Container(
                               height: 160,
                               color: Colors.grey[100],
                               child: const Center(
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+                                child: Icon(
+                                  Icons.broken_image_rounded,
+                                  color: Colors.grey,
                                 ),
-                              ),
-                            );
-                          },
-                          errorBuilder: (context, error, stack) => Container(
-                            height: 160,
-                            color: Colors.grey[100],
-                            child: const Center(
-                              child: Icon(
-                                Icons.broken_image_rounded,
-                                color: Colors.grey,
                               ),
                             ),
                           ),

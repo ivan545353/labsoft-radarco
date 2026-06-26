@@ -12,6 +12,7 @@ import 'comentarios_sheet.dart';
 import '../../usuarios/screens/perfil_usuario_screen.dart';
 import '../../auth/controllers/auth_controller.dart';
 import '../../auth/controllers/usuario_controller.dart';
+import '../../../core/widgets/visor_imagen.dart';
 
 class HechoDetalleScreen extends StatefulWidget {
   final HechoModel hecho;
@@ -505,18 +506,27 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
                   ? Stack(
                       fit: StackFit.expand,
                       children: [
-                        Image.network(widget.hecho.fotoUrl!, fit: BoxFit.cover),
-                        Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.black.withOpacity(0.6),
-                                Colors.transparent,
-                                Colors.black.withOpacity(0.4),
-                              ],
-                              stops: const [0.0, 0.3, 1.0],
+                        GestureDetector(
+                          onTap: () =>
+                              abrirVisorImagen(context, widget.hecho.fotoUrl!),
+                          child: Image.network(
+                            widget.hecho.fotoUrl!,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        IgnorePointer(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.black.withOpacity(0.6),
+                                  Colors.transparent,
+                                  Colors.black.withOpacity(0.4),
+                                ],
+                                stops: const [0.0, 0.3, 1.0],
+                              ),
                             ),
                           ),
                         ),
