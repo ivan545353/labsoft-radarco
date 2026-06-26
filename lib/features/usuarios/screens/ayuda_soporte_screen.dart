@@ -133,7 +133,60 @@ class AyudaSoporteScreen extends StatelessWidget {
                   _buildFaqItem(
                     pregunta: '¿Cómo reporto un problema en mi barrio?',
                     respuesta:
-                        'Toca el botón central "Reportar" en el mapa. Selecciona la ubicación exacta, elige la categoría (ej. Bache, Luminaria), añade una foto si la tienes y presiona Publicar.',
+                        'Toca el botón central "Reportar" en el mapa. Selecciona la ubicación exacta, elige la categoría (ej. Bache, Luminaria), añade una foto y presiona Publicar.',
+                  ),
+                  _buildDivider(),
+                  _buildFaqItem(
+                    pregunta: '¿Necesito una cuenta para usar la app?',
+                    respuesta:
+                        'No para mirar: cualquiera puede explorar el mapa y ver los reportes sin registrarse. Para crear un reporte, confirmar o comentar sí necesitás iniciar sesión, así mantenemos la trazabilidad y evitamos el spam.',
+                  ),
+                  _buildDivider(),
+                  _buildFaqItem(
+                    pregunta:
+                        '¿Por qué solo puedo reportar dentro de Caleta Olivia?',
+                    respuesta:
+                        'RadarCO está enfocada en Caleta Olivia. Si el punto que elegís queda fuera del ejido urbano, la app no te deja publicar, para mantener el mapa limpio y relevante para la ciudad.',
+                  ),
+                  _buildDivider(),
+                  _buildFaqItem(
+                    pregunta:
+                        '¿Puedo reportar algo que no está donde estoy parado?',
+                    respuesta:
+                        'Sí. Podés mover el pin en el mapa y reportar en otra ubicación de la ciudad (un "reporte a distancia"). En ese caso la foto se carga desde tu galería, en vez de tomarse en vivo.',
+                  ),
+                  _buildDivider(),
+                  _buildFaqItem(
+                    pregunta:
+                        '¿Por qué algunas fotos dicen "no verificada en el lugar"?',
+                    respuesta:
+                        'Las fotos tomadas en vivo desde la app tienen la máxima confianza. Cuando un reporte se hace a distancia con una foto de galería, la marcamos como "no verificada en el lugar" para que la comunidad sepa que su confianza depende de la validación de los vecinos.',
+                  ),
+                  _buildDivider(),
+                  _buildFaqItem(
+                    pregunta: '¿Por qué me pide una foto reciente?',
+                    respuesta:
+                        'En los reportes a distancia, la foto no puede tener más de 1 día de antigüedad. Así nos aseguramos de que el reporte refleje algo que está pasando ahora y no una imagen vieja reciclada.',
+                  ),
+                  _buildDivider(),
+                  _buildFaqItem(
+                    pregunta:
+                        '¿Por qué se ven borrosas las caras y las patentes?',
+                    respuesta:
+                        'Para proteger la privacidad de terceros, la app detecta y difumina automáticamente los rostros y las patentes de vehículos antes de publicar la foto. Es automático: no tenés que hacer nada.',
+                  ),
+                  _buildDivider(),
+                  _buildFaqItem(
+                    pregunta: '¿Puedo reportar sin conexión a internet?',
+                    respuesta:
+                        'Sí. Si no tenés señal, podés crear el reporte igual y queda guardado en tu teléfono. Cuando recuperás conexión, se publica solo y te avisamos. Mientras tanto lo ves como "sin publicar" en el feed.',
+                  ),
+                  _buildDivider(),
+                  _buildFaqItem(
+                    pregunta:
+                        '¿Qué pasa si reporto algo que ya reportó otro vecino?',
+                    respuesta:
+                        'Si detectamos un reporte parecido muy cerca, te lo mostramos para que sumes tu apoyo al existente en vez de duplicarlo. Si ese reporte parecido es tuyo, te llevamos directo a él.',
                   ),
                   _buildDivider(),
                   _buildFaqItem(
@@ -143,15 +196,41 @@ class AyudaSoporteScreen extends StatelessWidget {
                   ),
                   _buildDivider(),
                   _buildFaqItem(
+                    pregunta:
+                        '¿Cómo confirmo o marco como resuelto un reporte?',
+                    respuesta:
+                        'En el detalle de cada hecho usá "Sigue pasando" si el problema continúa, o "Marcar como resuelto" si ya se solucionó. Cuando 3 vecinos distintos confirman la resolución, el reporte pasa a resuelto.',
+                  ),
+                  _buildDivider(),
+                  _buildFaqItem(
                     pregunta: '¿Cómo funciona la reputación?',
                     respuesta:
                         'Ganas puntos cada vez que creas un reporte validado por la comunidad o cuando interactúas confirmando el estado de otros reportes. Al sumar puntos, subirás de nivel y desbloquearás nuevos rangos.',
                   ),
                   _buildDivider(),
                   _buildFaqItem(
+                    pregunta: '¿Cómo comparto un reporte?',
+                    respuesta:
+                        'Abrí el detalle del reporte y tocá "Compartir". Se arma un mensaje con la categoría, la dirección y la foto, listo para enviar por WhatsApp, redes o cualquier app.',
+                  ),
+                  _buildDivider(),
+                  _buildFaqItem(
+                    pregunta: 'Olvidé mi contraseña, ¿cómo la recupero?',
+                    respuesta:
+                        'En la pantalla de inicio de sesión tocá "¿Olvidaste tu contraseña?". Te enviamos un código por correo; lo ingresás en la app junto con tu nueva contraseña y listo.',
+                  ),
+                  _buildDivider(),
+                  _buildFaqItem(
                     pregunta: '¿Mis reportes son públicos?',
                     respuesta:
                         'Tus reportes y tu alias son públicos para la comunidad de Caleta Olivia. Sin embargo, si decides eliminar tu cuenta, tus reportes pasarán a ser completamente anónimos.',
+                  ),
+                  _buildDivider(),
+                  _buildFaqItem(
+                    pregunta:
+                        '¿Cómo elimino mi cuenta y qué pasa con mis datos?',
+                    respuesta:
+                        'Podés eliminarla desde Perfil → Privacidad y Datos. Se borran tu identidad y tus datos personales; tus reportes permanecen en el mapa pero pasan a ser completamente anónimos, para no afectar el historial de la comunidad.',
                     isLast: true,
                   ),
                 ],

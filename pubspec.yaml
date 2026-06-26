@@ -127,10 +127,8 @@ flutter_launcher_icons:
   min_sdk_android: 21 # Evita errores en versiones antiguas de Android
 
 flutter_native_splash:
-  color: "#F4F7FB" # Usamos el mismo color de fondo de tus pantallas
-  image: "assets/logo.png"
-  
-  # Configuración obligatoria para los nuevos estándares de Android 12+
+  color: "#FFFFFF"
+  image: assets/logo.png
   android_12:
-    image: "assets/logo.png"
-    icon_background_color: "#F4F7FB"
+    color: "#FFFFFF"
+    image: assets/logo.png

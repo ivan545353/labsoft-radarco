@@ -121,4 +121,21 @@ class AuthRepository {
       redirectTo: 'radarciudadano://login-callback/',
     );
   }
+
+  // Verifica el código OTP de recuperación (6 dígitos).
+  Future<void> verificarCodigoRecuperacion({
+    required String email,
+    required String token,
+  }) async {
+    await _supabase.auth.verifyOTP(
+      type: OtpType.recovery,
+      email: email,
+      token: token,
+    );
+  }
+
+  // Actualiza la contraseña del usuario ya autenticado por el código.
+  Future<void> actualizarContrasena(String nuevaContrasena) async {
+    await _supabase.auth.updateUser(UserAttributes(password: nuevaContrasena));
+  }
 }

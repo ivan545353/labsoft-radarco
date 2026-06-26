@@ -19,6 +19,10 @@ class AuthController extends ChangeNotifier {
 
   bool _isDisposed = false;
 
+  // Mientras está abierto el flujo de recuperación, evita que el listener
+  // de login interprete la sesión temporal del OTP como un login normal.
+  static bool recuperacionEnProceso = false;
+
   // --- MÉTODOS AUXILIARES ---
   @override
   void dispose() {
@@ -128,19 +132,52 @@ class AuthController extends ChangeNotifier {
     }
   }
 
-  Future<bool> recuperarContrasena(String email) async {
+  // Recuperación por código (OTP) — Paso 1: enviar el código al correo.
+  Future<bool> enviarCodigoRecuperacion(String email) async {
     _mensajeError = null;
-
     if (email.isEmpty) {
-      _mensajeError =
-          'Por favor, ingresa tu correo electrónico para recuperar la contraseña.';
+      _mensajeError = 'Por favor, ingresá tu correo electrónico.';
       notifyListeners();
       return false;
     }
-
     _setEstadoCargando(true);
     try {
       await _repository.enviarCorreoRecuperacion(email);
+      return true;
+    } catch (e) {
+      _manejarError(e);
+      return false;
+    } finally {
+      _setEstadoCargando(false);
+    }
+  }
+
+  // Paso 2: verificar el código y setear la nueva contraseña.
+  Future<bool> confirmarNuevaContrasena({
+    required String email,
+    required String codigo,
+    required String nuevaContrasena,
+  }) async {
+    _mensajeError = null;
+    if (codigo.trim().length < 8) {
+      _mensajeError = 'Ingresá el código de 8 dígitos que te enviamos.';
+      notifyListeners();
+      return false;
+    }
+    if (nuevaContrasena.length < 6) {
+      _mensajeError = 'La contraseña debe tener al menos 6 caracteres.';
+      notifyListeners();
+      return false;
+    }
+    _setEstadoCargando(true);
+    try {
+      await _repository.verificarCodigoRecuperacion(
+        email: email,
+        token: codigo.trim(),
+      );
+      await _repository.actualizarContrasena(nuevaContrasena);
+      // Cerramos la sesión temporal: el usuario inicia con su nueva clave.
+      await _repository.cerrarSesion();
       return true;
     } catch (e) {
       _manejarError(e);

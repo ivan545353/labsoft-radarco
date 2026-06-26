@@ -151,9 +151,26 @@ class _HechoDetalleScreenState extends State<HechoDetalleScreen> {
   }
 
   void _manejarCompartir() {
-    Share.share(
-      '🚨 RadarCO: Un vecino reportó algo importante. ¡Descarga la app y ayúdanos a validar si ya se resolvió!',
-    );
+    final desc = widget.hecho.descripcion ?? '';
+    final matchCat = RegExp(r'^\[(.*?)\]\s*-\s*').firstMatch(desc);
+    final categoria = matchCat?.group(1)?.trim() ?? 'Reporte';
+    final texto = desc.replaceFirst(RegExp(r'^\[.*?\]\s*-\s*'), '').trim();
+
+    final estado = widget.hecho.estado == 'resuelto'
+        ? '✅ Resuelto'
+        : '🟠 Activo';
+
+    final partes = <String>[
+      '🚨 RadarCO · $categoria ($estado)',
+      if (widget.hecho.direccion != null && widget.hecho.direccion!.isNotEmpty)
+        '📍 ${widget.hecho.direccion}',
+      if (texto.isNotEmpty) '"$texto"',
+      if (widget.hecho.fotoUrl != null && widget.hecho.fotoUrl!.isNotEmpty)
+        widget.hecho.fotoUrl!,
+      '\nMirá lo que pasa en tu ciudad con RadarCO.',
+    ];
+
+    Share.share(partes.join('\n'), subject: 'RadarCO · $categoria');
   }
 
   Future<void> _manejarVotoSiguePasando() async {

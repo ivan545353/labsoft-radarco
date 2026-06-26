@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_colors.dart';
 import '../controllers/auth_controller.dart';
 import 'register_screen.dart';
+import 'recuperar_contrasena_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -27,8 +28,9 @@ class _LoginScreenState extends State<LoginScreen> {
     _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((
       data,
     ) {
-      if (data.session != null && mounted) {
-        // Cierra el login y vuelve al mapa
+      if (data.session != null &&
+          mounted &&
+          !AuthController.recuperacionEnProceso) {
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
     });
@@ -82,76 +84,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _mostrarDialogoRecuperacion() {
-    final emailRecuperacionController = TextEditingController(
-      text: _emailController.text,
-    );
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Recuperar Contraseña'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Ingresa tu correo electrónico y te enviaremos un enlace.',
-                style: TextStyle(fontSize: 14),
-              ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: emailRecuperacionController,
-                decoration: const InputDecoration(
-                  labelText: 'Correo',
-                  prefixIcon: Icon(Icons.email),
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.emailAddress,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(
-                'Cancelar',
-                style: TextStyle(color: Colors.blueGrey[600]),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                FocusScope.of(context).unfocus();
-                final exito = await _authController.recuperarContrasena(
-                  emailRecuperacionController.text.trim(),
-                );
-                if (!mounted) return;
-                Navigator.pop(context);
-                if (exito) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Revisa tu bandeja de entrada.'),
-                      backgroundColor: AppColors.exito,
-                    ),
-                  );
-                } else if (_authController.mensajeError != null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(_authController.mensajeError!),
-                      backgroundColor: AppColors.problema,
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.azulPrimario,
-              ),
-              child: const Text(
-                'Enviar Enlace',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
-        );
-      },
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const RecuperarContrasenaScreen()),
     );
   }
 
